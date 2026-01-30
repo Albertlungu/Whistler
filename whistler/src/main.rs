@@ -1,3 +1,6 @@
+mod app;
+mod message;
+
 fn main () {
-    // Placeholder
+    iced::run(app::App::update, app::App::view);
 }
