@@ -24,7 +24,7 @@ impl Default for BasicApp {
 impl AppDelegate for BasicApp {
     fn did_finish_launching(&self) {
         self.text_field.set_frame(Rect {
-            top: 350.0,  // This is from the BOTTOM, so higher number = higher in window
+            top: 350.0,  // this parameter is measured from the bottom (lower number = lower down in the woindow)
             left: 20.0,
             width: 360.0,
             height: 30.0,
