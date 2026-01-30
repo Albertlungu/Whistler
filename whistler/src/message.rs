@@ -1,4 +1,6 @@
+use iced::widget::text_editor::Action;
+
 #[derive(Debug, Clone)]
 pub enum Message {
-    // Add more variants here as more features are built
+    EditorAction(Action),
 }
