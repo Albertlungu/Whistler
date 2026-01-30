@@ -1,5 +1,6 @@
-use iced::widget::{column, text};
-use iced::widget::text_editor::{TextEditor, Content};
+use iced::keyboard::{key, Key};
+use iced::widget::{column};
+use iced::widget::text_editor::{TextEditor, Content, Binding, KeyPress, Motion};
 use iced::Element;
 use crate::message::Message;
 
@@ -7,14 +8,6 @@ use crate::message::Message;
 pub struct App {
     editor_content: Content,
 }
-
-// impl Default for App {
-//     fn default() -> Self {
-//         Self {
-//             editor_content: Content::new(""), // Empty string for initialization of editor
-//         }
-//     }
-// }
 
 impl App {
     pub fn update(&mut self, message: Message) { // &mut self basically means this function is allowed to modify states in App
@@ -28,9 +21,45 @@ impl App {
     // Element<Message> is essentially type annotation (like in Python, which would mean an Element that se3nds Message objects when interacted with)
     pub fn view(&self) -> Element<Message> { // This means the view is only allowed to read, not change states
         let editor = TextEditor::new(&self.editor_content)
-            .on_action(Message::EditorAction);
+            .on_action(Message::EditorAction)
+            .key_binding(|key_press: KeyPress|{
+                let modifiers = key_press.modifiers;
+
+                match key_press.key.as_ref() {
+                    Key::Named(key::Named::Backspace) => {
+                        if modifiers.command() {
+                            Some(Binding::Sequence(vec![
+                                Binding::Select(Motion::Home),
+                                Binding::Backspace,
+                            ]))
+                        } else if modifiers.alt() {
+                            Some(Binding::Sequence(vec![
+                                Binding::Select(Motion::WordLeft),
+                                Binding::Backspace,
+                            ]))
+                        } else {
+                            Binding::from_key_press(key_press)
+                        }
+                    }
+                    Key::Named(key::Named::Delete) => {
+                        if modifiers.command() {
+                            Some(Binding::Sequence(vec![
+                                Binding::Select(Motion::End),
+                                Binding::Delete,
+                            ]))
+                        } else if modifiers.alt() {
+                            Some(Binding::Sequence(vec![
+                                Binding::Select(Motion::WordRight),
+                                Binding::Delete,
+                            ]))
+                        } else {
+                            Binding::from_key_press(key_press)
+                        }
+                    }
+                    _ => Binding::from_key_press(key_press)
+                }
+            });
         column![ // ! = macro: generates at compile time
-            text("Whistler IDE"),
             editor
         ]
         .into()
