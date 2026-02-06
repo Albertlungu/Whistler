@@ -1,0 +1,387 @@
+use iced::keyboard::Key;
+use iced::window;
+use iced::widget::{text, column, row, button, container, mouse_area};
+use iced::widget::text_editor::Content;
+use iced::{Element, Event, Length, Subscription};
+use std::path::PathBuf;
+
+use crate::message::Message;
+use crate::file_tree::FileTree;
+use crate::theme::*;
+use crate::ui::{
+    create_editor, empty_editor, view_sidebar,
+    editor_container_style, status_bar_style, tab_bar_style,
+    tab_button_style, tab_close_button_style, drag_handle_style,
+};
+
+#[derive(Debug)]
+pub struct Tab {
+    pub path: PathBuf,
+    pub content: Content,
+    pub name: String,
+    pub modified: bool,
+}
+
+pub struct App {
+    tabs: Vec<Tab>,
+    active_tab: Option<usize>,
+    cursor_line: usize,
+    cursor_col: usize,
+    file_tree: Option<FileTree>,
+    sidebar_visible: bool,
+    sidebar_width: f32,
+    resizing_sidebar: bool,
+    resize_start_x: Option<f32>,
+    resize_start_width: f32,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            tabs: Vec::new(),
+            active_tab: None,
+            cursor_line: 1,
+            cursor_col: 1,
+            file_tree: None,
+            sidebar_visible: true,
+            sidebar_width: SIDEBAR_DEFAULT_WIDTH,
+            resizing_sidebar: false,
+            resize_start_x: None,
+            resize_start_width: SIDEBAR_DEFAULT_WIDTH,
+        }
+    }
+}
+
+impl App {
+    pub fn update(&mut self, message: Message) -> iced::Task<Message> {
+        match message {
+            // The below section basically just creates "instances" for each message,
+            // declaring the actual action that each of them does.
+            Message::EditorAction(action) => { // This one records a keystroke in the editor
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        let _ = tab.content.perform(action);
+                        tab.modified = true;
+                        let cursor = tab.content.cursor();
+                        self.cursor_line = cursor.position.line + 1;
+                        self.cursor_col = cursor.position.column + 1;
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::FolderToggled(path) => { // Checks if a folder was clicked
+                if let Some(ref mut tree) = self.file_tree {
+                    tree.toggle_folder(&path);
+                }
+                iced::Task::none()
+            }
+            Message::FileClicked(path) => { // Checks if a file was clicked
+                if let Some(ref mut tree) = self.file_tree {
+                    tree.select(path.clone()); // Opens the file
+                }
+                if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
+                    self.active_tab = Some(idx);
+                    return iced::Task::none();
+                }
+                iced::Task::perform(
+                    async move {
+                        let content = std::fs::read_to_string(&path)
+                            .unwrap_or_else(|_| String::from("Could not read file"));
+                        (path, content) // Error handling if it is a file that the editor cannot read,
+                                        // e.g. image or .pkl (for now)
+                    },
+                    |(path, content)| Message::FileOpened(path, content)
+                )
+            }
+            Message::TabClosed(idx) => {  // To close a tab using the "x" button
+                if idx < self.tabs.len() {
+                    self.tabs.remove(idx); // Just removes a tab at that index
+                    if self.tabs.is_empty() {
+                        self.active_tab = None; // Avoid errors by setting active tab to none if none exist
+                    } else if let Some(active) = self.active_tab {
+                        if active >= self.tabs.len() {
+                            self.active_tab = Some(self.tabs.len() - 1);
+                        } else if active > idx {
+                            self.active_tab = Some(active - 1);
+                        }
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::CloseActiveTab => { // Closes only the active tab (this is only used once in the code for the keyboard shortcut)
+                if let Some(idx) = self.active_tab {
+                    self.tabs.remove(idx);
+                    if self.tabs.is_empty() {
+                        self.active_tab = None; // If there are no tabs, set active tab to none to avoid errors
+                    } else if idx >= self.tabs.len() {
+                        self.active_tab = Some(self.tabs.len() - 1);
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::FileOpened(path, content) => {
+                let name = path.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                self.tabs.push(Tab {
+                    path,
+                    content: Content::with_text(&content),
+                    name,
+                    modified: false,
+                });
+                self.active_tab = Some(self.tabs.len() - 1);
+                iced::Task::none()
+            }
+            Message::TabSelected(idx) => {
+                if idx < self.tabs.len() {
+                    self.active_tab = Some(idx);
+                }
+                iced::Task::none()
+            }
+            Message::FileTreeRefresh => {
+                if let Some(ref mut tree) = self.file_tree {
+                    tree.refresh();
+                }
+                iced::Task::none()
+            }
+            Message::OpenFolderDialog => {
+                iced::Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Open Folder")
+                            .pick_folder()
+                            .await
+                            .map(|handle| handle.path().to_path_buf())
+                    },
+                    |result| {
+                        match result {
+                            Some(path) => Message::FolderOpened(path),
+                            None => Message::FileTreeRefresh,
+                        }
+                    }
+                )
+            }
+            Message::FolderOpened(path) => {
+                self.file_tree = Some(FileTree::new(path));
+                iced::Task::none()
+            }
+            Message::SaveFile => {
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get(idx) {
+                        let path = tab.path.clone();
+                        let content = tab.content.text();
+                        return iced::Task::perform(
+                            async move {
+                                std::fs::write(&path, content)
+                                    .map_err(|e| e.to_string())
+                            },
+                            Message::FileSaved,
+                        );
+                    }
+                }
+                iced::Task::none()
+            }
+
+            Message::FileSaved(result) => {
+                if let Err(e) = result {
+                    eprintln!("Failed to save file: {}", e);
+                } else if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx){
+                        tab.modified = false;
+                    }
+                }
+                iced::Task::none()
+            }
+
+            Message::SidebarResizeStart => {
+                self.resizing_sidebar = true;
+                self.resize_start_x = None;
+                self.resize_start_width = self.sidebar_width;
+                iced::Task::none()
+            }
+            Message::SidebarResizing(x) => {
+                if self.resizing_sidebar {
+                    if let Some(start_x) = self.resize_start_x {
+                        let delta = start_x - x;
+                        self.sidebar_width = (self.resize_start_width + delta)
+                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                    } else {
+                        self.resize_start_x = Some(x);
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::SidebarResizeEnd => {
+                self.resizing_sidebar = false;
+                self.resize_start_x = None;
+                iced::Task::none()
+            }
+
+            Message::ToggleSidebar => {
+                self.sidebar_visible = !self.sidebar_visible;
+                iced::Task::none()
+            }
+
+            Message::ToggleFullscreen(_mode) => {
+                window::oldest().and_then(move |id|{
+                    window::maximize(id, true)
+                })
+            }
+        }
+    }
+
+    pub fn view(&self) -> Element<'_, Message> {
+        let tab_bar = self.view_tab_bar();
+        let editor_widget = self.view_editor();
+        let status_bar = self.view_status_bar();
+
+        let editor_container = if self.active_tab.is_some() {
+            container(column![tab_bar, editor_widget, status_bar])
+        } else {
+            self.view_welcome_screen()
+        }
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(editor_container_style);
+
+        let editor_area = container(editor_container)
+            .padding(8)
+            .width(Length::Fill);
+
+        if self.sidebar_visible {
+            let sidebar = view_sidebar(self.file_tree.as_ref(), self.sidebar_width);
+
+            let drag_handle = mouse_area(
+                button(text(""))
+                    .style(drag_handle_style)
+                    .width(Length::Fixed(DRAG_HANDLE_WIDTH))
+                    .height(Length::Fill)
+                    .padding(0)
+            )
+            .on_press(Message::SidebarResizeStart)
+            .interaction(iced::mouse::Interaction::ResizingHorizontally);
+
+            row![editor_area, drag_handle, sidebar].into()
+        } else {
+            editor_area.into()
+        }
+    }
+
+    pub fn subscription(&self) -> Subscription<Message> {
+        iced::event::listen_with(|event, _status, _id| {
+            match event {
+                Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Some(Message::SidebarResizing(position.x))
+                }
+                Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
+                    Some(Message::SidebarResizeEnd)
+                }
+                Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: Key::Character(c),
+                modifiers,
+                ..
+            }) => {
+                if modifiers.command() && modifiers.control() {
+                    match c.as_str() {
+                        "f" => return Some(Message::ToggleFullscreen(window::Mode::Fullscreen)),
+                        _ => {}
+                    }
+                } else if modifiers.command() {
+                    match c.as_str() {
+                        "r" => return Some(Message::ToggleSidebar),
+                        "o" => return Some(Message::OpenFolderDialog),
+                        "w" => return Some(Message::CloseActiveTab),
+                        "s" => return Some(Message::SaveFile),
+                        _ => {}
+                    }
+                }
+                None
+            }
+            _ => None,
+            }
+        })
+    }
+
+    fn view_tab_bar(&self) -> Element<'_, Message> {
+        if self.tabs.is_empty() {
+            return container(text("")).into();
+        }
+
+        let tabs: Vec<Element<'_, Message>> = self.tabs
+            .iter()
+            .enumerate()
+            .map(|(idx, tab)| {
+                let is_active = self.active_tab == Some(idx);
+                let close_icon = if tab.modified {
+                    text("●").size(10).color(TEXT_MUTED)
+                } else {
+                    text("x").size(10).color(TEXT_DIM)
+                };
+
+                button(
+                    row![
+                        text(&tab.name).size(12).color(TEXT_MUTED),
+                        button(close_icon)
+                            .style(tab_close_button_style)
+                            .on_press(Message::TabClosed(idx))
+                            .padding(2),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center)
+                )
+                .style(tab_button_style(is_active))
+                .on_press(Message::TabSelected(idx))
+                .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+                .into()
+            })
+            .collect();
+
+        container(row(tabs).spacing(4))
+            .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 8.0 })
+            .width(Length::Fill)
+            .style(tab_bar_style)
+            .into()
+    }
+
+    fn view_editor(&self) -> Element<'_, Message> {
+        if let Some(idx) = self.active_tab {
+            if let Some(tab) = self.tabs.get(idx) {
+                return create_editor(&tab.content);
+            }
+        }
+        empty_editor()
+    }
+
+    fn view_status_bar(&self) -> Element<'_, Message> {
+        container(
+            text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
+                .size(11)
+                .color(TEXT_DIM)
+        )
+        .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+        .width(Length::Fill)
+        .style(status_bar_style)
+        .into()
+    }
+
+    fn view_welcome_screen(&self) -> iced::widget::Container<'_, Message> {
+        let folder_name = self.file_tree
+            .as_ref()
+            .map(|t| t.root.file_name().unwrap_or_default().to_string_lossy().to_string())
+            .unwrap_or_else(|| String::from("No folder open"));
+
+        container(
+            column![
+                text(folder_name).size(24).color(TEXT_MUTED),
+                text("Select a file from the sidebar to begin editing")
+                    .size(13)
+                    .color(TEXT_PLACEHOLDER),
+            ]
+            .spacing(12)
+            .align_x(iced::Alignment::Center)
+        )
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+    }
+}
