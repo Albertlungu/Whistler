@@ -4,6 +4,7 @@ mod app;
 mod message;
 mod file_tree;
 mod icons;
+mod syntax;
 mod theme;
 mod ui;
 

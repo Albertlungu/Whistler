@@ -3,12 +3,19 @@ use iced::widget::text_editor::{TextEditor, Content, Binding, KeyPress, Motion};
 use iced::{Element, Length};
 
 use crate::message::Message;
+use crate::syntax::{VscodeHighlighter, Settings, Highlight};
 use crate::ui::styles::text_editor_style;
 
-pub fn create_editor<'a>(content: &'a Content) -> Element<'a, Message> {
+pub fn create_editor<'a>(content: &'a Content, extension: &str) -> Element<'a, Message> {
     TextEditor::new(content) // Creates a new TextEditor object
         .on_action(Message::EditorAction) // Sends a Message when an edit is made
         .key_binding(editor_key_bindings) // Uses key bindings from the below function
+        .highlight_with::<VscodeHighlighter>(
+            Settings {
+                extension: extension.to_string(),
+            },
+        |highlight, _theme| highlight.to_format(),
+        )
         .style(text_editor_style) // Uses the editor styles determined in the styles.rs file
         .height(Length::Fill)
         .into()

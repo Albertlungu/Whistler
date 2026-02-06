@@ -356,7 +356,10 @@ impl App {
     fn view_editor(&self) -> Element<'_, Message> {
         if let Some(idx) = self.active_tab {
             if let Some(tab) = self.tabs.get(idx) {
-                return create_editor(&tab.content);
+                let ext = tab.path.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("");
+                return create_editor(&tab.content, ext);
             }
         }
         empty_editor()
