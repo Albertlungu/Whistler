@@ -36,8 +36,8 @@ fn view_file_tree(tree: &FileTree) -> Element<'_, Message> {
 fn view_empty_sidebar<'a>() -> Element<'a, Message> {
     container(
         column![
-            text("No folder open").size(13).color(TEXT_MUTED),
-            text("Cmd+O to open").size(11).color(TEXT_PLACEHOLDER),
+            text("No folder open").size(13).color(THEME.text_muted),
+            text("Cmd+O to open").size(11).color(THEME.text_placeholder),
         ]
         .spacing(4)
         .align_x(iced::Alignment::Center)

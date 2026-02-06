@@ -7,14 +7,14 @@ use crate::theme::*;
 
 pub fn tree_button_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
     let background = match status {
-        ButtonStatus::Hovered => Some(Background::Color(BG_HOVER)),
-        ButtonStatus::Pressed => Some(Background::Color(BG_PRESSED)),
+        ButtonStatus::Hovered => Some(Background::Color(THEME.bg_hover)),
+        ButtonStatus::Pressed => Some(Background::Color(THEME.bg_pressed)),
         _ => None,
     };
 
     ButtonStyle {
         background,
-        text_color: TEXT_SECONDARY,
+        text_color: THEME.text_secondary,
         border: Border::default(),
         shadow: Default::default(),
         snap: false,
@@ -23,10 +23,10 @@ pub fn tree_button_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
 
 pub fn tab_button_style(is_active: bool) -> impl Fn(&Theme, ButtonStatus) -> ButtonStyle {
     move |_theme, _status| {
-        let bg_color = if is_active { BG_TAB_ACTIVE } else { BG_TAB_INACTIVE };
+        let bg_color = if is_active { THEME.bg_tab_active } else { THEME.bg_tab_inactive };
         ButtonStyle {
             background: Some(Background::Color(bg_color)),
-            text_color: TEXT_SECONDARY,
+            text_color: THEME.text_secondary,
             border: Border {
                 color: Color::TRANSPARENT,
                 width: 0.0,
@@ -41,7 +41,7 @@ pub fn tab_button_style(is_active: bool) -> impl Fn(&Theme, ButtonStatus) -> But
 pub fn tab_close_button_style(_theme: &Theme, _status: ButtonStatus) -> ButtonStyle {
     ButtonStyle {
         background: None,
-        text_color: TEXT_DIM,
+        text_color: THEME.text_dim,
         border: Border::default(),
         shadow: Default::default(),
         snap: false,
@@ -50,14 +50,14 @@ pub fn tab_close_button_style(_theme: &Theme, _status: ButtonStatus) -> ButtonSt
 
 pub fn editor_container_style(_theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(BG_PRIMARY)),
+        background: Some(Background::Color(THEME.bg_primary)),
         border: Border {
-            color: BORDER_SUBTLE,
+            color: THEME.border_subtle,
             width: 1.0,
             radius: BORDER_RADIUS.into(),
         },
         shadow: iced::Shadow {
-            color: SHADOW_DARK,
+            color: THEME.shadow_dark,
             offset: Vector::new(0.0, 4.0),
             blur_radius: 16.0,
         },
@@ -67,14 +67,14 @@ pub fn editor_container_style(_theme: &Theme) -> container::Style {
 
 pub fn sidebar_container_style(_theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(BG_SECONDARY)),
+        background: Some(Background::Color(THEME.bg_secondary)),
         border: Border {
-            color: BORDER_SUBTLE,
+            color: THEME.border_subtle,
             width: 1.0,
             radius: BORDER_RADIUS.into(),
         },
         shadow: iced::Shadow {
-            color: SHADOW_LIGHT,
+            color: THEME.shadow_light,
             offset: Vector::new(-10.0, 0.0),
             blur_radius: 12.0,
         },
@@ -84,9 +84,9 @@ pub fn sidebar_container_style(_theme: &Theme) -> container::Style {
 
 pub fn status_bar_style(_theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(BG_STATUS_BAR)),
+        background: Some(Background::Color(THEME.bg_status_bar)),
         border: Border {
-            color: BORDER_VERY_SUBTLE,
+            color: THEME.border_very_subtle,
             width: 0.0,
             radius: 0.0.into(),
         },
@@ -96,30 +96,30 @@ pub fn status_bar_style(_theme: &Theme) -> container::Style {
 
 pub fn tab_bar_style(_theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(BG_TAB_BAR)),
+        background: Some(Background::Color(THEME.bg_tab_bar)),
         ..Default::default()
     }
 }
 
 pub fn text_editor_style(_theme: &Theme, _status: text_editor::Status) -> text_editor::Style {
     text_editor::Style {
-        background: Background::Color(BG_EDITOR),
+        background: Background::Color(THEME.bg_editor),
         border: Border {
             color: Color::TRANSPARENT,
             width: 0.0,
             radius: 0.0.into(),
         },
-        placeholder: TEXT_PLACEHOLDER,
-        value: TEXT_PRIMARY,
-        selection: SELECTION,
+        placeholder: THEME.text_placeholder,
+        value: THEME.text_primary,
+        selection: THEME.selection,
     }
 }
 
 pub fn drag_handle_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
     let background = match status {
-        ButtonStatus::Hovered => Some(Background::Color(BG_HOVER)),
-        ButtonStatus::Pressed => Some(Background::Color(BG_PRESSED)),
-        _ => Some(Background::Color(BG_DRAG_HANDLE)),
+        ButtonStatus::Hovered => Some(Background::Color(THEME.bg_hover)),
+        ButtonStatus::Pressed => Some(Background::Color(THEME.bg_pressed)),
+        _ => Some(Background::Color(THEME.bg_drag_handle)),
     };
 
     ButtonStyle {

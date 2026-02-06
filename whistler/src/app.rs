@@ -249,7 +249,7 @@ impl App {
             .padding(8)
             .width(Length::Fill);
 
-        if self.sidebar_visible {
+        let content: Element<'_, Message> = if self.sidebar_visible {
             let sidebar = view_sidebar(self.file_tree.as_ref(), self.sidebar_width);
 
             let drag_handle = mouse_area(
@@ -265,7 +265,16 @@ impl App {
             row![editor_area, drag_handle, sidebar].into()
         } else {
             editor_area.into()
-        }
+        };
+
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|_theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(THEME.bg_editor)),
+                ..Default::default()
+            })
+            .into()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -314,14 +323,14 @@ impl App {
             .map(|(idx, tab)| {
                 let is_active = self.active_tab == Some(idx);
                 let close_icon = if tab.modified {
-                    text("●").size(10).color(TEXT_MUTED)
+                    text("●").size(10).color(THEME.text_muted)
                 } else {
-                    text("x").size(10).color(TEXT_DIM)
+                    text("x").size(10).color(THEME.text_dim)
                 };
 
                 button(
                     row![
-                        text(&tab.name).size(12).color(TEXT_MUTED),
+                        text(&tab.name).size(12).color(THEME.text_muted),
                         button(close_icon)
                             .style(tab_close_button_style)
                             .on_press(Message::TabClosed(idx))
@@ -357,7 +366,7 @@ impl App {
         container(
             text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
                 .size(11)
-                .color(TEXT_DIM)
+                .color(THEME.text_dim)
         )
         .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
         .width(Length::Fill)
@@ -373,10 +382,10 @@ impl App {
 
         container(
             column![
-                text(folder_name).size(24).color(TEXT_MUTED),
+                text(folder_name).size(24).color(THEME.text_muted),
                 text("Select a file from the sidebar to begin editing")
                     .size(13)
-                    .color(TEXT_PLACEHOLDER),
+                    .color(THEME.text_placeholder),
             ]
             .spacing(12)
             .align_x(iced::Alignment::Center)
