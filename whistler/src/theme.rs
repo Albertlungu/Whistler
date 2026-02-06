@@ -1,9 +1,12 @@
 use iced::Color;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
-use std::fs;
+use std::{fs, str::FromStr};
 
-// Layout constants (not theme-dependent)
+use syntect::highlighting::{
+    Color as SynColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem, ThemeSet, ThemeSettings
+};
+
 pub const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
 pub const SIDEBAR_MIN_WIDTH: f32 = 100.0;
 pub const SIDEBAR_MAX_WIDTH: f32 = 500.0;
@@ -13,7 +16,6 @@ pub const INDENT_WIDTH: f32 = 16.0;
 pub const BORDER_RADIUS: f32 = 12.0;
 pub const BORDER_RADIUS_SMALL: f32 = 6.0;
 
-// Theme colors loaded from VSCode theme JSON
 pub struct ThemeColors {
     pub bg_primary: Color,
     pub bg_secondary: Color,
@@ -35,14 +37,102 @@ pub struct ThemeColors {
     pub selection: Color,
     pub shadow_dark: Color,
     pub shadow_light: Color,
+    pub syntax_theme: SynTheme,
 }
 
 const THEME_JSON_PATH: &str =
     "extensions/themes/sainnhe.gruvbox-material-6.5.2/themes/gruvbox-material-dark.json";
 
 #[derive(Deserialize)]
+#[serde(untagged)]
+enum TokenScope{
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+#[derive(Deserialize)]
+struct TokenSettings {
+    foreground: Option<String>,
+    #[serde(rename = "fontStyle")]
+    font_style: Option<String>,
+    background: Option<String>,
+}
+
+struct VscodeTokenColor {
+    #[allow(dead_code)]
+    name: Option<String>,
+    scope: Option<TokenScope>,
+    settings: TokenSettings,
+}
+#[derive(Deserialize)]
 struct VscodeTheme {
     colors: VscodeColors,
+    #[serde(rename = "tokenColors", default)]
+    token_colors: Vec<VscodeTokenColor>,
+}
+
+fn hex_to_syn(hex: &str) -> Option<SynColor> {
+    let hex = hex.trim_start_matches("#");
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    let a = if hex.len() >= 8 {
+        u8::from_str_radix(&hex[6..8], 16).ok()?
+    } else {
+        255
+    };
+    Some(SynColor { r, g, b, a })
+}
+
+fn parse_font_style(s: &str) -> FontStyle {
+    let mut style = FontStyle::empty();
+    for part in s.split_whitespace() {
+        match part {
+            "bold" => style |= FontStyle::BOLD,
+            "italic" => style |= FontStyle::ITALIC,
+            "underline" => style |= FontStyle::UNDERLINE,
+            _ => {}
+        }
+    }
+    style
+}
+
+fn build_syntect_theme(
+    token_colors: &[VscodeTokenColor],
+    editor_bg: Option<&str>,
+    editor_fg: Option<&str>,
+) -> SynTheme {
+    let settings = ThemeSettings {
+        foreground: editor_fg.and_then(hex_to_syn),
+        background: editor_bg.and_then(hex_to_syn),
+        ..ThemeSettings::default()
+    };
+
+    let scopes: Vec<ThemeItem> = token_colors
+        .iter()
+        .filter_map(|tc| {
+            let scope_str = match &tc.scope {
+                Some(TokenScope::Single(s)) => s.clone(),
+                Some(TokenScope::Multiple(v)) => v.join(", "),
+                None => return None,
+            };
+
+            let scope = ScopeSelectors::from_str(&scope_str).ok()?
+
+            let style = StyleModifier {
+                foreground: tc.settings.foreground.as_deref().and_then(hex_to_syn),
+                background: tc.settings.background.as_deref().and_then(hex_to_syn),
+                font_style: tc.settings.font_style.as_deref().map(parse_font_style)),
+            };
+            Some(ThemeItem { scope, style })
+        })
+        .collect();
+    SynTheme {
+        name: None,
+        author: None,
+        settings,
+        scopes,
+    }
 }
 
 #[derive(Deserialize)]
@@ -102,6 +192,11 @@ fn load_theme() -> ThemeColors {
     let Ok(json) = fs::read_to_string(THEME_JSON_PATH) else { return d; };
     let Ok(theme): Result<VscodeTheme, _> = serde_json::from_str(&json) else { return d; };
     let c = &theme.colors;
+    let syntax_theme = build_syntect_theme(
+        &theme.token_colors,
+        c.editor_background.as_deref(),
+        c.editor_foreground.as_deref(),
+    );
 
     ThemeColors {
         bg_primary:       c.color(&c.line_highlight, d.bg_primary),
@@ -125,6 +220,7 @@ fn load_theme() -> ThemeColors {
         border_very_subtle: d.border_very_subtle,
         shadow_dark:      d.shadow_dark,
         shadow_light:     d.shadow_light,
+        syntax_theme,
     }
 }
 
@@ -151,6 +247,7 @@ impl Default for ThemeColors {
             selection:        Color::from_rgba(0.3, 0.5, 0.8, 0.4),
             shadow_dark:      Color::from_rgba(0.0, 0.0, 0.0, 0.3),
             shadow_light:     Color::from_rgba(1.0, 1.0, 1.0, 0.02),
+            syntax_theme: SynTheme::default(),
         }
     }
 }
