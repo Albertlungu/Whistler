@@ -1,6 +1,6 @@
-use iced::widget::text_editor::highlighter;
+use iced::advanced::text::highlighter;
+use iced::advanced::text::highlighter::Highlighter as IcedHighlighter;
 use iced::{Color, Font};
-use iced::text::Highlighter as IcedHighlighter;
 
 use syntect::highlighting::{
     HighlightIterator,
@@ -12,7 +12,6 @@ use syntect::highlighting::{
 use syntect::parsing::{
     ParseState,
     ScopeStack,
-    SyntaxReference,
     SyntaxSet
 };
 
@@ -41,17 +40,9 @@ impl Highlight {
 pub struct VscodeHighlighter {
     syntax_set: SyntaxSet,
     theme: Arc<SynTheme>,
-    syntax: SyntaxReference,
+    syntax_name: String,
     parse_states: Vec<(ParseState, HighlightState)>,
     current_line: usize,
-}
-
-impl VscodeHighlighter {
-    fn syntax(&self) -> &SyntaxReference {
-        self.syntax_set
-            .find_syntax_by_name(&self.syntax_name)
-            .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text())
-    }
 }
 
 impl IcedHighlighter for VscodeHighlighter {
@@ -59,17 +50,17 @@ impl IcedHighlighter for VscodeHighlighter {
     type Highlight = Highlight;
     type Iterator<'a> = Box<dyn Iterator<Item = (Range<usize>, Self::Highlight)> + 'a>;
 
-    fn new(settings: &Self::settings) -> Self {
+    fn new(settings: &Self::Settings) -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme = Arc::new(THEME.syntax_theme.clone());
 
         let syntax = syntax_set
             .find_syntax_by_extension(&settings.extension)
             .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
-        let syntax_name = syntax_name.clone();
+        let syntax_name = syntax.name.clone();
 
         let highlighter = SyntectHighlighter::new(&theme);
-        let initial_parse = ParseState::new(sytnax);
+        let initial_parse = ParseState::new(syntax);
         let initial_highlight = HighlightState::new(&highlighter, ScopeStack::new());
 
         Self {
@@ -87,8 +78,8 @@ impl IcedHighlighter for VscodeHighlighter {
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
         self.syntax_name = syntax.name.clone();
 
-        let highlighter = SyntectHighlighter::new(&theme);
-        let initial_parse = ParseState::new(sytnax);
+        let highlighter = SyntectHighlighter::new(&self.theme);
+        let initial_parse = ParseState::new(syntax);
         let initial_highlight = HighlightState::new(&highlighter, ScopeStack::new());
 
         self.parse_states = vec![(initial_parse, initial_highlight)];
@@ -117,7 +108,10 @@ impl IcedHighlighter for VscodeHighlighter {
             .parse_line(line, &self.syntax_set)
             .unwrap_or_default();
 
-        let ranges: Vec<(Style, &str)> = HighlightIterator::new(highlight_state.clone());
+        let ranges: Vec<(Style, &str)> =
+            HighlightIterator::new(highlight_state, &ops, line, &highlighter).collect();
+
+        let next_state = (parse_state.clone(), highlight_state.clone());
         if idx + 1 < self.parse_states.len() {
             self.parse_states[idx + 1] = next_state;
         } else {
