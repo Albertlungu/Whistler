@@ -58,6 +58,7 @@ struct TokenSettings {
     background: Option<String>,
 }
 
+#[derive(Deserialize)]
 struct VscodeTokenColor {
     #[allow(dead_code)]
     name: Option<String>,
@@ -117,12 +118,12 @@ fn build_syntect_theme(
                 None => return None,
             };
 
-            let scope = ScopeSelectors::from_str(&scope_str).ok()?
+            let scope = ScopeSelectors::from_str(&scope_str).ok()?;
 
             let style = StyleModifier {
                 foreground: tc.settings.foreground.as_deref().and_then(hex_to_syn),
                 background: tc.settings.background.as_deref().and_then(hex_to_syn),
-                font_style: tc.settings.font_style.as_deref().map(parse_font_style)),
+                font_style: tc.settings.font_style.as_deref().map(parse_font_style),
             };
             Some(ThemeItem { scope, style })
         })
