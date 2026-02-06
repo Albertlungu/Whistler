@@ -104,12 +104,19 @@ impl IcedHighlighter for VscodeHighlighter {
 
         let (ref mut parse_state, ref mut highlight_state) = self.parse_states[idx];
 
+        // Syntect grammars loaded with load_defaults_newlines() expect lines
+        // to end with \n. Without it, end-of-line patterns (used by Python's
+        // triple-quoted strings, among others) don't fire and multi-line state
+        // gets corrupted.
+        let line_with_newline = format!("{}\n", line);
+
         let ops = parse_state
-            .parse_line(line, &self.syntax_set)
+            .parse_line(&line_with_newline, &self.syntax_set)
             .unwrap_or_default();
 
         let ranges: Vec<(Style, &str)> =
-            HighlightIterator::new(highlight_state, &ops, line, &highlighter).collect();
+            HighlightIterator::new(highlight_state, &ops, &line_with_newline, &highlighter)
+                .collect();
 
         let next_state = (parse_state.clone(), highlight_state.clone());
         if idx + 1 < self.parse_states.len() {
@@ -120,17 +127,22 @@ impl IcedHighlighter for VscodeHighlighter {
 
         self.current_line += 1;
 
+        let line_len = line.len();
         let mut result = Vec::new();
         let mut offset = 0;
         for (style, text) in ranges {
             let len = text.len();
+            if offset >= line_len {
+                break;
+            }
+            let capped_end = (offset + len).min(line_len);
             let color = Color::from_rgba8(
                 style.foreground.r,
                 style.foreground.g,
                 style.foreground.b,
                 style.foreground.a as f32 / 255.0,
             );
-            result.push((offset..offset + len, Highlight(color)));
+            result.push((offset..capped_end, Highlight(color)));
             offset += len;
         }
 
