@@ -1,7 +1,7 @@
 use iced::keyboard::Key;
 use iced::window;
 use iced::widget::{text, column, row, button, container, mouse_area};
-use iced::widget::text_editor::Content;
+use iced::widget::text_editor::{Content, Action};
 use iced::{Element, Event, Length, Subscription};
 use std::path::PathBuf;
 
@@ -60,6 +60,10 @@ impl App {
             Message::EditorAction(action) => { // This one records a keystroke in the editor
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
+                        let action = match action {
+                            Action::Scroll { lines } => Action::Scroll { lines: lines / 5},
+                            other => other,
+                        };
                         let _ = tab.content.perform(action);
                         tab.modified = true;
                         let cursor = tab.content.cursor();
