@@ -1,9 +1,19 @@
 use iced::widget::button::{Style as ButtonStyle, Status as ButtonStatus};
 use iced::widget::container;
 use iced::widget::text_editor;
+use iced::border::Radius;
 use iced::{Background, Border, Color, Theme, Vector};
 
 use crate::theme::*;
+
+fn lighten(color: Color, amount: f32) -> Color {
+    Color::from_rgba(
+        (color.r + amount).min(1.0),
+        (color.g + amount).min(1.0),
+        (color.b + amount).min(1.0),
+        color.a,
+    )
+}
 
 pub fn tree_button_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
     let background = match status {
@@ -22,15 +32,26 @@ pub fn tree_button_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
 }
 
 pub fn tab_button_style(is_active: bool) -> impl Fn(&Theme, ButtonStatus) -> ButtonStyle {
-    move |_theme, _status| {
-        let bg_color = if is_active { THEME.bg_tab_active } else { THEME.bg_tab_inactive };
+    move |_theme, status| {
+        let (background, text_color) = if is_active {
+            (
+                Some(Background::Color(lighten(THEME.bg_tab_bar, 0.08))),
+                THEME.text_primary,
+            )
+        } else {
+            let bg = match status {
+                ButtonStatus::Hovered => Some(Background::Color(lighten(THEME.bg_tab_bar, 0.04))),
+                _ => None,
+            };
+            (bg, THEME.text_dim)
+        };
         ButtonStyle {
-            background: Some(Background::Color(bg_color)),
-            text_color: THEME.text_secondary,
+            background,
+            text_color,
             border: Border {
                 color: Color::TRANSPARENT,
                 width: 0.0,
-                radius: BORDER_RADIUS_SMALL.into(),
+                radius: BORDER_RADIUS_TAB.into(),
             },
             shadow: Default::default(),
             snap: false,
@@ -52,8 +73,8 @@ pub fn editor_container_style(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(THEME.bg_primary)),
         border: Border {
-            color: THEME.border_subtle,
-            width: 1.0,
+            color: Color::TRANSPARENT,
+            width: 0.0,
             radius: BORDER_RADIUS.into(),
         },
         shadow: iced::Shadow {
@@ -66,11 +87,13 @@ pub fn editor_container_style(_theme: &Theme) -> container::Style {
 }
 
 pub fn sidebar_container_style(_theme: &Theme) -> container::Style {
+    let bg = THEME.bg_secondary;
+    let bg_translucent = Color::from_rgba(bg.r, bg.g, bg.b, 0.93);
     container::Style {
-        background: Some(Background::Color(THEME.bg_secondary)),
+        background: Some(Background::Color(bg_translucent)),
         border: Border {
-            color: THEME.border_subtle,
-            width: 1.0,
+            color: Color::TRANSPARENT,
+            width: 0.0,
             radius: BORDER_RADIUS.into(),
         },
         shadow: iced::Shadow {
@@ -83,12 +106,14 @@ pub fn sidebar_container_style(_theme: &Theme) -> container::Style {
 }
 
 pub fn status_bar_style(_theme: &Theme) -> container::Style {
+    let bg = THEME.bg_status_bar;
+    let bg_subtle = Color::from_rgba(bg.r, bg.g, bg.b, bg.a * 0.5);
     container::Style {
-        background: Some(Background::Color(THEME.bg_status_bar)),
+        background: Some(Background::Color(bg_subtle)),
         border: Border {
             color: THEME.border_very_subtle,
             width: 0.0,
-            radius: 0.0.into(),
+            radius: Radius { top_left: 0.0, top_right: 0.0, bottom_right: BORDER_RADIUS, bottom_left: BORDER_RADIUS },
         },
         ..Default::default()
     }
@@ -97,6 +122,11 @@ pub fn status_bar_style(_theme: &Theme) -> container::Style {
 pub fn tab_bar_style(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(THEME.bg_tab_bar)),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: Radius { top_left: BORDER_RADIUS, top_right: BORDER_RADIUS, bottom_right: 0.0, bottom_left: 0.0 },
+        },
         ..Default::default()
     }
 }

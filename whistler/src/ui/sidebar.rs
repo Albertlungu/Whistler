@@ -19,18 +19,18 @@ pub fn view_sidebar<'a>(file_tree: Option<&'a FileTree>, width: f32) -> Element<
     )
     .width(Length::Fixed(width))
     .height(Length::Fill)
-    .padding(8)
+    .padding(10)
     .style(sidebar_container_style);
 
     container(sidebar)
-        .padding(8)
+        .padding(10)
         .into()
 }
 
 fn view_file_tree(tree: &FileTree) -> Element<'_, Message> {
     let mut items: Vec<Element<'_, Message>> = Vec::new();
     render_entries(&tree.entries, tree, 0, &mut items);
-    column(items).spacing(2).into()
+    column(items).spacing(4).into()
 }
 
 fn view_empty_sidebar<'a>() -> Element<'a, Message> {
@@ -79,7 +79,7 @@ fn render_entries<'a>(
                 )
                 .style(tree_button_style)
                 .on_press(Message::FolderToggled(path.clone()))
-                .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 8.0 })
+                .padding(iced::Padding { top: 6.0, right: 10.0, bottom: 6.0, left: 10.0 })
                 .width(Length::Fill);
 
                 items.push(btn.into());
@@ -107,7 +107,7 @@ fn render_entries<'a>(
                 )
                 .style(tree_button_style)
                 .on_press(Message::FileClicked(path.clone()))
-                .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 8.0 })
+                .padding(iced::Padding { top: 6.0, right: 10.0, bottom: 6.0, left: 10.0 })
                 .width(Length::Fill);
 
                 items.push(btn.into());

@@ -11,7 +11,7 @@ use crate::theme::*;
 use crate::ui::{
     create_editor, empty_editor, view_sidebar,
     editor_container_style, status_bar_style, tab_bar_style,
-    tab_button_style, tab_close_button_style, drag_handle_style,
+    tab_button_style, tab_close_button_style,
 };
 
 #[derive(Debug)]
@@ -246,23 +246,21 @@ impl App {
         .style(editor_container_style);
 
         let editor_area = container(editor_container)
-            .padding(8)
+            .padding(10)
             .width(Length::Fill);
 
         let content: Element<'_, Message> = if self.sidebar_visible {
             let sidebar = view_sidebar(self.file_tree.as_ref(), self.sidebar_width);
 
-            let drag_handle = mouse_area(
-                button(text(""))
-                    .style(drag_handle_style)
-                    .width(Length::Fixed(DRAG_HANDLE_WIDTH))
+            let resize_zone = mouse_area(
+                container(text(""))
+                    .width(Length::Fixed(RESIZE_HIT_WIDTH))
                     .height(Length::Fill)
-                    .padding(0)
             )
             .on_press(Message::SidebarResizeStart)
             .interaction(iced::mouse::Interaction::ResizingHorizontally);
 
-            row![editor_area, drag_handle, sidebar].into()
+            row![editor_area, resize_zone, sidebar].into()
         } else {
             editor_area.into()
         };
@@ -341,13 +339,13 @@ impl App {
                 )
                 .style(tab_button_style(is_active))
                 .on_press(Message::TabSelected(idx))
-                .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+                .padding(iced::Padding { top: 8.0, right: 16.0, bottom: 8.0, left: 16.0 })
                 .into()
             })
             .collect();
 
-        container(row(tabs).spacing(4))
-            .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 8.0 })
+        container(row(tabs).spacing(6))
+            .padding(iced::Padding { top: 8.0, right: 12.0, bottom: 8.0, left: 12.0 })
             .width(Length::Fill)
             .style(tab_bar_style)
             .into()
@@ -368,10 +366,10 @@ impl App {
     fn view_status_bar(&self) -> Element<'_, Message> {
         container(
             text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
-                .size(11)
-                .color(THEME.text_dim)
+                .size(10)
+                .color(THEME.text_placeholder)
         )
-        .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+        .padding(iced::Padding { top: 4.0, right: 12.0, bottom: 6.0, left: 12.0 })
         .width(Length::Fill)
         .style(status_bar_style)
         .into()

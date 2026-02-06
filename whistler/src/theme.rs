@@ -10,11 +10,11 @@ use syntect::highlighting::{
 pub const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
 pub const SIDEBAR_MIN_WIDTH: f32 = 100.0;
 pub const SIDEBAR_MAX_WIDTH: f32 = 500.0;
-pub const DRAG_HANDLE_WIDTH: f32 = 4.0;
+pub const RESIZE_HIT_WIDTH: f32 = 12.0;
 pub const ICON_SIZE: f32 = 16.0;
 pub const INDENT_WIDTH: f32 = 16.0;
-pub const BORDER_RADIUS: f32 = 12.0;
-pub const BORDER_RADIUS_SMALL: f32 = 6.0;
+pub const BORDER_RADIUS: f32 = 14.0;
+pub const BORDER_RADIUS_TAB: f32 = 10.0;
 
 pub struct ThemeColors {
     pub bg_primary: Color,
