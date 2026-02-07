@@ -1,6 +1,6 @@
 use iced::keyboard::Key;
-use iced::window;
-use iced::widget::{text, column, row, button, container, mouse_area};
+use iced::{debug, window};
+use iced::widget::{text, column, row, button, container, mouse_area, scrollable, markdown};
 use iced::widget::text_editor::{Content, Action};
 use iced::{Element, Event, Length, Subscription};
 use std::path::PathBuf;
@@ -15,11 +15,21 @@ use crate::ui::{
 };
 
 #[derive(Debug)]
+pub enum TabKind {
+    Editor {
+        content: Content,
+        modified: bool,
+    },
+    Preview {
+        md_content: markdown::Content,
+    },
+}
+
+#[derive(Debug)]
 pub struct Tab {
     pub path: PathBuf,
-    pub content: Content,
     pub name: String,
-    pub modified: bool,
+    pub kind: TabKind,
 }
 
 pub struct App {
@@ -60,15 +70,17 @@ impl App {
             Message::EditorAction(action) => { // This one records a keystroke in the editor
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
-                        let action = match action {
+                        if let TabKind::Editor { ref mut content, ref mut modified } = tab.kind {
+                            let action = match action {
                             Action::Scroll { lines } => Action::Scroll { lines: lines / 5},
                             other => other,
                         };
-                        let _ = tab.content.perform(action);
-                        tab.modified = true;
-                        let cursor = tab.content.cursor();
+                        let _ = content.perform(action);
+                        *modified = true;
+                        let cursor = content.cursor();
                         self.cursor_line = cursor.position.line + 1;
                         self.cursor_col = cursor.position.column + 1;
+                        }
                     }
                 }
                 iced::Task::none()
@@ -130,9 +142,11 @@ impl App {
                     .to_string();
                 self.tabs.push(Tab {
                     path,
-                    content: Content::with_text(&content),
                     name,
-                    modified: false,
+                    kind: TabKind::Editor {
+                        content: Content::with_text(&content),
+                        modified: false,
+                    },
                 });
                 self.active_tab = Some(self.tabs.len() - 1);
                 iced::Task::none()
@@ -173,8 +187,9 @@ impl App {
             Message::SaveFile => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get(idx) {
-                        let path = tab.path.clone();
-                        let content = tab.content.text();
+                        if let TabKind::Editor { ref content, .. } = tab.kind {
+                            let path = tab.path.clone();
+                        let content = content.text();
                         return iced::Task::perform(
                             async move {
                                 std::fs::write(&path, content)
@@ -182,6 +197,7 @@ impl App {
                             },
                             Message::FileSaved,
                         );
+                        }
                     }
                 }
                 iced::Task::none()
@@ -192,7 +208,9 @@ impl App {
                     eprintln!("Failed to save file: {}", e);
                 } else if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx){
-                        tab.modified = false;
+                        if let TabKind::Editor { ref mut modified, .. } = tab.kind {
+                            *modified = false;
+                        }
                     }
                 }
                 iced::Task::none()
@@ -231,6 +249,30 @@ impl App {
                 window::oldest().and_then(move |id|{
                     window::maximize(id, true)
                 })
+            }
+
+            Message::PreviewMarkdown => {
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get(idx) {
+                        if let TabKind::Editor { ref content, .. } = tab.kind {
+                            let text = content.text();
+                            let md_content = markdown::Content::parse(&text);
+                            let preview_name = format!("Preview: {}", tab.name);
+                            let path = tab.path.clone();
+                            self.tabs.push(Tab {
+                                path,
+                                name: preview_name,
+                                kind: TabKind::Preview { md_content },
+                            });
+                            self.active_tab = Some(self.tabs.len() - 1);
+                        }
+                    }
+                }
+                iced::Task::none()
+            }
+
+            Message::MarkdownLinkClicked(_uri) => {
+                iced::Task::none()
             }
         }
     }
@@ -298,6 +340,11 @@ impl App {
                         "f" => return Some(Message::ToggleFullscreen(window::Mode::Fullscreen)),
                         _ => {}
                     }
+                } else if modifiers.command() && modifiers.shift() {
+                    match c.as_str() {
+                        "v" | "V" => return Some(Message::PreviewMarkdown),
+                        _ => {}
+                    }
                 } else if modifiers.command() {
                     match c.as_str() {
                         "r" => return Some(Message::ToggleSidebar),
@@ -324,7 +371,8 @@ impl App {
             .enumerate()
             .map(|(idx, tab)| {
                 let is_active = self.active_tab == Some(idx);
-                let close_icon = if tab.modified {
+                let is_modified = matches!(&tab.kind, TabKind::Editor { modified: true, .. });
+                let close_icon = if is_modified {
                     text("●").size(10).color(THEME.text_muted)
                 } else {
                     text("x").size(10).color(THEME.text_dim)
@@ -358,10 +406,27 @@ impl App {
     fn view_editor(&self) -> Element<'_, Message> {
         if let Some(idx) = self.active_tab {
             if let Some(tab) = self.tabs.get(idx) {
-                let ext = tab.path.extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
-                return create_editor(&tab.content, ext);
+                match &tab.kind {
+                    TabKind::Editor { content, .. } => {
+                        let ext = tab.path.extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("");
+                        return create_editor(content, ext);
+                    }
+                    TabKind::Preview { md_content } => {
+                        return scrollable(
+                            markdown::view(
+                                md_content.items(),
+                                markdown::Settings::with_style(markdown::Style::from_palette(
+                                    iced::theme::Palette::CATPPUCCIN_MOCHA,
+                                )),
+                            )
+                            .map(Message::MarkdownLinkClicked)
+                        )
+                        .height(Length::Fill)
+                        .into();
+                    }
+                }
             }
         }
         empty_editor()

@@ -23,6 +23,9 @@ pub enum Message {
     SidebarResizeStart,
     SidebarResizing(f32),
     SidebarResizeEnd,
+    /// Markdown preview and other md stuff
+    PreviewMarkdown,
+    MarkdownLinkClicked(iced::widget::markdown::Uri),
     /// Fullscreen and window management stuff
     ToggleFullscreen(iced::window::Mode),
 }
