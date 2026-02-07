@@ -21,7 +21,7 @@ pub enum TabKind {
         modified: bool,
     },
     Preview {
-        md_content: markdown::Content,
+        md_items: Vec<markdown::Item>,
     },
 }
 
@@ -256,13 +256,13 @@ impl App {
                     if let Some(tab) = self.tabs.get(idx) {
                         if let TabKind::Editor { ref content, .. } = tab.kind {
                             let text = content.text();
-                            let md_content = markdown::Content::parse(&text);
+                            let md_items: Vec<markdown::Item> = markdown::parse(&text).collect();
                             let preview_name = format!("Preview: {}", tab.name);
                             let path = tab.path.clone();
                             self.tabs.push(Tab {
                                 path,
                                 name: preview_name,
-                                kind: TabKind::Preview { md_content },
+                                kind: TabKind::Preview { md_items },
                             });
                             self.active_tab = Some(self.tabs.len() - 1);
                         }
@@ -413,10 +413,10 @@ impl App {
                             .unwrap_or("");
                         return create_editor(content, ext);
                     }
-                    TabKind::Preview { md_content } => {
+                    TabKind::Preview { md_items } => {
                         return scrollable(
                             markdown::view(
-                                md_content.items(),
+                                md_items,
                                 markdown::Settings::with_style(markdown::Style::from_palette(
                                     iced::theme::Palette::CATPPUCCIN_MOCHA,
                                 )),

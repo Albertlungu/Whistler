@@ -102,12 +102,13 @@ impl IcedHighlighter for VscodeHighlighter {
         let idx = self.current_line;
         let highlighter = SyntectHighlighter::new(&self.theme);
 
-        let (ref mut parse_state, ref mut highlight_state) = self.parse_states[idx];
+        // Clone so the stored beginning-of-line state isn't corrupted by
+        // in-place mutation. Without this, re-highlighting a line (after
+        // change_line) would start from the end-of-line state instead of
+        // the beginning-of-line state, breaking multi-line constructs
+        // like Python's triple-quoted strings.
+        let (mut parse_state, mut highlight_state) = self.parse_states[idx].clone();
 
-        // Syntect grammars loaded with load_defaults_newlines() expect lines
-        // to end with \n. Without it, end-of-line patterns (used by Python's
-        // triple-quoted strings, among others) don't fire and multi-line state
-        // gets corrupted.
         let line_with_newline = format!("{}\n", line);
 
         let ops = parse_state
@@ -115,10 +116,10 @@ impl IcedHighlighter for VscodeHighlighter {
             .unwrap_or_default();
 
         let ranges: Vec<(Style, &str)> =
-            HighlightIterator::new(highlight_state, &ops, &line_with_newline, &highlighter)
+            HighlightIterator::new(&mut highlight_state, &ops, &line_with_newline, &highlighter)
                 .collect();
 
-        let next_state = (parse_state.clone(), highlight_state.clone());
+        let next_state = (parse_state, highlight_state);
         if idx + 1 < self.parse_states.len() {
             self.parse_states[idx + 1] = next_state;
         } else {
