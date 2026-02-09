@@ -3,6 +3,18 @@
 version = 4
 
 [[package]]
+name = "Whistler"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "once_cell",
+ "rfd",
+ "serde",
+ "serde_json",
+ "syntect",
+]
+
+[[package]]
 name = "ab_glyph"
 version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4504,18 +4516,6 @@ dependencies = [
  "log",
  "thiserror 2.0.18",
  "web-sys",
-]
-
-[[package]]
-name = "whistler"
-version = "0.1.0"
-dependencies = [
- "iced",
- "once_cell",
- "rfd",
- "serde",
- "serde_json",
- "syntect",
 ]
 
 [[package]]
