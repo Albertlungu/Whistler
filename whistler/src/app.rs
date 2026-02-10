@@ -340,6 +340,8 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        use iced::widget::stack;
+
         let tab_bar = self.view_tab_bar();
         let editor_widget = self.view_editor();
         let status_bar = self.view_status_bar();
@@ -357,7 +359,7 @@ impl App {
             .padding(10)
             .width(Length::Fill);
 
-        let content: Element<'_, Message> = if self.sidebar_visible {
+        let base_content: Element<'_, Message> = if self.sidebar_visible {
             let sidebar = view_sidebar(self.file_tree.as_ref(), self.sidebar_width);
 
             let resize_zone = mouse_area(
@@ -373,14 +375,21 @@ impl App {
             editor_area.into()
         };
 
-        container(content)
+        let wrapped = container(base_content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|_theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(THEME.bg_editor)),
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(THEME.bg_editor)),
                 ..Default::default()
-            })
-            .into()
+            });
+
+        if self.search_visible {
+            stack![wrapped, self.view_search_overlay()].into()
+        } else if self.file_finder_visible {
+            stack![wrapped, self.view_file_finder_overlay()].into()
+        } else {
+            wrapped.into()
+        }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

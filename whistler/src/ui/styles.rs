@@ -4,7 +4,7 @@ use iced::widget::text_editor;
 use iced::border::Radius;
 use iced::{Background, Border, Color, Theme, Vector};
 
-use crate::theme::*;
+use crate::theme::{self, *};
 
 fn lighten(color: Color, amount: f32) -> Color {
     Color::from_rgba(
@@ -158,5 +158,27 @@ pub fn drag_handle_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
         border: Border::default(),
         shadow: Default::default(),
         snap: false,
+    }
+}
+
+pub fn search_overlay_style(_theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgba(
+            THEME.bg_primary.r,
+            THEME.bg_primary.b,
+            THEME.bg_primary.b,
+            0.97,
+        ))),
+        border: Border {
+            color: THEME.border_subtle,
+            width: 1.0,
+            radius: BORDER_RADIUS.into(),
+        },
+        shadow: iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+            offset: Vector::new(0.0, 8.0),
+            blur_radius: 32.0,
+        },
+        ..Default::default()
     }
 }
