@@ -185,11 +185,11 @@ pub fn search_panel_style(_theme: &Theme) -> container::Style {
 
 pub fn search_input_style(_theme: &Theme, _status: iced::widget::text_input::Status) -> iced::widget::text_input::Style {
     iced::widget::text_input::Style {
-        background: Background::Color(lighten(THEME.bg_primary, 0.04)),
+        background: Background::Color(Color::TRANSPARENT),
         border: Border {
-            color: THEME.border_subtle,
-            width: 1.0,
-            radius: (BORDER_RADIUS_TAB).into(),
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
         },
         icon: THEME.text_dim,
         placeholder: THEME.text_placeholder,
