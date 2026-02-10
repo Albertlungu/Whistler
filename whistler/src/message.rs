@@ -1,5 +1,5 @@
 use iced::widget::text_editor::Action;
-use std::path::PathBuf;
+use std::{path::PathBuf, str::pattern::StrSearcher};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -26,6 +26,11 @@ pub enum Message {
     /// Markdown preview and other md stuff
     PreviewMarkdown,
     MarkdownLinkClicked(iced::widget::markdown::Uri),
+    /// Searching stuff
+    ToggleSearch,
+    SearchQueryChanged(String),
+    SearchCompleted(Vec<SearchResult>),
+    SearchResultClicked(PathBuf, usize), // (filepath, line number)
     /// Fullscreen and window management stuff
     ToggleFullscreen(iced::window::Mode),
 }

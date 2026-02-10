@@ -3,15 +3,14 @@ use iced::{debug, window};
 use iced::widget::{text, column, row, button, container, mouse_area, scrollable, markdown};
 use iced::widget::text_editor::{Content, Action};
 use iced::{Element, Event, Length, Subscription};
+use std::backtrace;
 use std::path::PathBuf;
 
 use crate::message::Message;
 use crate::file_tree::FileTree;
 use crate::theme::*;
 use crate::ui::{
-    create_editor, empty_editor, view_sidebar,
-    editor_container_style, status_bar_style, tab_bar_style,
-    tab_button_style, tab_close_button_style,
+    create_editor, editor_container_style, empty_editor, status_bar_style, tab_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar
 };
 
 #[derive(Debug)]
@@ -43,6 +42,9 @@ pub struct App {
     resizing_sidebar: bool,
     resize_start_x: Option<f32>,
     resize_start_width: f32,
+    search_visible: bool,
+    search_query: String,
+    search_results: Vec<crate::search::SearchResult>,
 }
 
 impl Default for App {
@@ -58,6 +60,9 @@ impl Default for App {
             resizing_sidebar: false,
             resize_start_x: None,
             resize_start_width: SIDEBAR_DEFAULT_WIDTH,
+            search_visible: false,
+            search_query: String::new(),
+            search_results: Vec::new(),
         }
     }
 }
@@ -274,6 +279,63 @@ impl App {
             Message::MarkdownLinkClicked(_uri) => {
                 iced::Task::none()
             }
+
+            Message::ToggleSearch => {
+                self.search_visible = !self.search_visible;
+                if !self.search_visible {
+                    self.search_query.clear();
+                    self.search_results.clear();
+                }
+                iced::Task::none()
+            }
+
+            Message::SearchQueryChanged(query) => {
+                self.search_query = query.clone();
+
+                if query.len() < 2 {
+                    self.search_results.clear();
+                    return iced::Task::none();
+                }
+
+                if let Some(ref tree) = self.file_tree {
+                    let root = tree.root.clone();
+                    iced::Task::perform(
+                        async move {
+                            crate::search::search_workspace(&root, &query)
+                        },
+                        Message::SearchCompleted,
+                    )
+                } else {
+                    iced::Task::none()
+                }
+            }
+
+            Message::SearchCompleted(results) => {
+                self.search_results = results;
+                iced::Task::none()
+            }
+
+            Message::SearchResultClicked(path, _line_number) => {
+                self.search_visible = false;
+                self.search_query.clear();
+                self.search_results.clear();
+
+                if let Some(ref mut tree) = self.file_tree {
+                    tree.select(path.clone());
+                }
+                if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
+                    self.active_tab = Some(idx);
+                    return iced::Task::none();
+                }
+                iced::Task::perform(
+                    async move {
+                        let content = std::fs::read_to_string(&path)
+                            .unwrap_or_else(|_| String::from("Could not read file"));
+                        (path, content)
+                    },
+                    |(path, content)| Message::FileOpened(path, content),
+                )
+            }
         }
     }
 
@@ -343,6 +405,7 @@ impl App {
                 } else if modifiers.command() && modifiers.shift() {
                     match c.as_str() {
                         "v" | "V" => return Some(Message::PreviewMarkdown),
+                        "f" | "F" => return Some(Message::ToggleSearch),
                         _ => {}
                     }
                 } else if modifiers.command() {
@@ -401,6 +464,91 @@ impl App {
             .width(Length::Fill)
             .style(tab_bar_style)
             .into()
+    }
+
+    fn view_search_overlay(&self) -> Element<'_, Message> {
+        use iced::widget::{text_input, stack, center, Space, opaque};
+
+        let input = text_input("Search across workspace...", &self.search_query)
+            .on_input(Message::SearchQueryChanged)
+            .size(14)
+            .padding(12)
+            .width(Length::Fill);
+
+        let mut result_items: Vec<Element<'_, Message>> = Vec::new();
+
+        for result in &self.search_results {
+            result_items.push(
+                container(
+                    text(&result.file_name)
+                        .size(12)
+                        .color(THEME.text_secondary)
+                )
+                .padding(iced::Padding { top: 8.0, right: 8.0, bottom: 4.0, left: 8.0 })
+                .into()
+            );
+
+            for m in result.matches.iter().take(5) {
+                let line_text = format!(" {}: {}", m.line_number, m.line_content.trim());
+                let path = result.path.clone();
+                let line_num = m.line_number;
+
+                result_items.push(
+                    button(
+                        text(line_text)
+                            .size(12)
+                            .color(THEME.text_muted)
+                    )
+                    .style(tree_button_style)
+                    .on_press(Message::SearchResultClicked(path, line_num))
+                    .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 16.0 })
+                    .width(Length::Fill)
+                    .into()
+                );
+            }
+
+            if result.matches.len() > 5 {
+                result.items.push(
+                    container(
+                        text(format!(" ... and {} more matches", result.matches.len() - 5))
+                            .size(11)
+                            .color(THEME.text_dim)
+                    )
+                    .padding(iced::Padding { top: 2.0, right: 8.0, bottom: 4.0, left: 16.0 })
+                    .into()
+                );
+            }
+        }
+
+        let results_column = scrollable(
+            column(result_items).spacing(2)
+        )
+        .height(Length::Fill);
+
+        let overlay_box = container(
+            column![input, results_column].spacing(8)
+        )
+        .width(Length::Fixed(600.0))
+        .max_height(500.0)
+        .padding(16)
+        .style(search_overlay_style);
+
+        let backdrop = mouse_area(
+            container(Space::new(Length::Fill, Length::Fill))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.4))),
+                    ..Default::default()
+                })
+        )
+        .on_press(Message::ToggleSearch);
+
+        stack![
+            backdrop,
+            center(opaque(overlay_box)),
+        ]
+        .into()
     }
 
     fn view_editor(&self) -> Element<'_, Message> {

@@ -190,7 +190,8 @@ fn hex_to_color(hex: &str) -> Option<Color> {
 
 fn load_theme() -> ThemeColors {
     let d = ThemeColors::default();
-    let Ok(json) = fs::read_to_string(THEME_JSON_PATH) else { return d; };
+    let path = crate::resources::resource_dir().join(THEME_JSON_PATH);
+    let Ok(json) = fs::read_to_string(&path) else { return d; };
     let Ok(theme): Result<VscodeTheme, _> = serde_json::from_str(&json) else { return d; };
     let c = &theme.colors;
     let syntax_theme = build_syntect_theme(

@@ -4,8 +4,10 @@ mod app;
 mod message;
 mod file_tree;
 mod icons;
+mod resources;
 mod syntax;
 mod theme;
+mod search;
 mod ui;
 
 const FIRA_CODE: &[u8] = include_bytes!("../fonts/FiraCode/ttf/FiraCode-Regular.ttf");
