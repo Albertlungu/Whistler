@@ -165,7 +165,7 @@ pub fn search_overlay_style(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(
             THEME.bg_primary.r,
-            THEME.bg_primary.b,
+            THEME.bg_primary.g,
             THEME.bg_primary.b,
             0.97,
         ))),

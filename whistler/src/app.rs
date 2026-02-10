@@ -385,8 +385,6 @@ impl App {
 
         if self.search_visible {
             stack![wrapped, self.view_search_overlay()].into()
-        } else if self.file_finder_visible {
-            stack![wrapped, self.view_file_finder_overlay()].into()
         } else {
             wrapped.into()
         }
@@ -517,7 +515,7 @@ impl App {
             }
 
             if result.matches.len() > 5 {
-                result.items.push(
+                result_items.push(
                     container(
                         text(format!(" ... and {} more matches", result.matches.len() - 5))
                             .size(11)
