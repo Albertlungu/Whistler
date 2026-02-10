@@ -1,16 +1,17 @@
 use iced::keyboard::Key;
-use iced::{debug, window};
-use iced::widget::{text, column, row, button, container, mouse_area, scrollable, markdown};
+use iced::window;
+use iced::widget::{text, text_input, column, row, button, container, mouse_area, scrollable, markdown, Space, stack};
 use iced::widget::text_editor::{Content, Action};
-use iced::{Element, Event, Length, Subscription};
-use std::backtrace;
+use iced::{Background, Color, Element, Event, Length, Subscription};
 use std::path::PathBuf;
 
 use crate::message::Message;
 use crate::file_tree::FileTree;
 use crate::theme::*;
 use crate::ui::{
-    create_editor, editor_container_style, empty_editor, status_bar_style, tab_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar
+    create_editor, editor_container_style, empty_editor, search_input_style, search_panel_style,
+    status_bar_style, tab_bar_style, tab_button_style, tab_close_button_style, tree_button_style,
+    view_sidebar,
 };
 
 #[derive(Debug)]
@@ -45,6 +46,7 @@ pub struct App {
     search_visible: bool,
     search_query: String,
     search_results: Vec<crate::search::SearchResult>,
+    search_input_id: iced::widget::Id,
 }
 
 impl Default for App {
@@ -63,6 +65,7 @@ impl Default for App {
             search_visible: false,
             search_query: String::new(),
             search_results: Vec::new(),
+            search_input_id: iced::widget::Id::unique(),
         }
     }
 }
@@ -281,10 +284,13 @@ impl App {
             }
 
             Message::ToggleSearch => {
-                self.search_visible = !self.search_visible;
-                if !self.search_visible {
+                if self.search_visible {
+                    self.search_visible = false;
                     self.search_query.clear();
                     self.search_results.clear();
+                } else {
+                    self.search_visible = true;
+                    return iced::widget::operation::focus(self.search_input_id.clone());
                 }
                 iced::Task::none()
             }
@@ -384,7 +390,12 @@ impl App {
             });
 
         if self.search_visible {
-            stack![wrapped, self.view_search_overlay()].into()
+            let search_panel = container(self.view_search_panel())
+                .padding(iced::Padding { top: 20.0, right: 0.0, bottom: 0.0, left: 20.0 })
+                .width(Length::Fill)
+                .height(Length::Fill);
+
+            stack![wrapped, search_panel].into()
         } else {
             wrapped.into()
         }
@@ -399,6 +410,12 @@ impl App {
                 Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
                     Some(Message::SidebarResizeEnd)
                 }
+                Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: Key::Named(iced::keyboard::key::Named::Escape),
+                ..
+            }) => {
+                return Some(Message::ToggleSearch);
+            }
                 Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: Key::Character(c),
                 modifiers,
@@ -473,89 +490,78 @@ impl App {
             .into()
     }
 
-    fn view_search_overlay(&self) -> Element<'_, Message> {
-        use iced::widget::{text_input, stack, center, Space, opaque};
-
+    fn view_search_panel(&self) -> Element<'_, Message> {
         let input = text_input("Search across workspace...", &self.search_query)
+            .id(self.search_input_id.clone())
             .on_input(Message::SearchQueryChanged)
-            .size(14)
-            .padding(12)
+            .style(search_input_style)
+            .size(13)
+            .padding(10)
             .width(Length::Fill);
 
-        let mut result_items: Vec<Element<'_, Message>> = Vec::new();
+        let mut content_col = column![input].spacing(6);
 
-        for result in &self.search_results {
-            result_items.push(
-                container(
-                    text(&result.file_name)
-                        .size(12)
-                        .color(THEME.text_secondary)
-                )
-                .padding(iced::Padding { top: 8.0, right: 8.0, bottom: 4.0, left: 8.0 })
-                .into()
-            );
+        if !self.search_results.is_empty() {
+            let mut result_items: Vec<Element<'_, Message>> = Vec::new();
 
-            for m in result.matches.iter().take(5) {
-                let line_text = format!(" {}: {}", m.line_number, m.line_content.trim());
-                let path = result.path.clone();
-                let line_num = m.line_number;
-
-                result_items.push(
-                    button(
-                        text(line_text)
-                            .size(12)
-                            .color(THEME.text_muted)
-                    )
-                    .style(tree_button_style)
-                    .on_press(Message::SearchResultClicked(path, line_num))
-                    .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 16.0 })
-                    .width(Length::Fill)
-                    .into()
-                );
-            }
-
-            if result.matches.len() > 5 {
+            for result in &self.search_results {
                 result_items.push(
                     container(
-                        text(format!(" ... and {} more matches", result.matches.len() - 5))
+                        text(&result.file_name)
                             .size(11)
-                            .color(THEME.text_dim)
+                            .color(THEME.text_secondary)
                     )
-                    .padding(iced::Padding { top: 2.0, right: 8.0, bottom: 4.0, left: 16.0 })
+                    .padding(iced::Padding { top: 6.0, right: 6.0, bottom: 2.0, left: 6.0 })
                     .into()
                 );
+
+                for m in result.matches.iter().take(3) {
+                    let line_text = format!("  {}:  {}", m.line_number, m.line_content.trim());
+                    let path = result.path.clone();
+                    let line_num = m.line_number;
+
+                    result_items.push(
+                        button(
+                            text(line_text)
+                                .size(11)
+                                .color(THEME.text_muted)
+                        )
+                        .style(tree_button_style)
+                        .on_press(Message::SearchResultClicked(path, line_num))
+                        .padding(iced::Padding { top: 3.0, right: 6.0, bottom: 3.0, left: 12.0 })
+                        .width(Length::Fill)
+                        .into()
+                    );
+                }
+
+                if result.matches.len() > 3 {
+                    result_items.push(
+                        container(
+                            text(format!("  ... and {} more", result.matches.len() - 3))
+                                .size(10)
+                                .color(THEME.text_dim)
+                        )
+                        .padding(iced::Padding { top: 1.0, right: 6.0, bottom: 2.0, left: 12.0 })
+                        .into()
+                    );
+                }
             }
+
+            let results_scroll = scrollable(
+                column(result_items).spacing(1)
+            )
+            .height(Length::Shrink);
+
+            content_col = content_col.push(
+                container(results_scroll).max_height(400.0)
+            );
         }
 
-        let results_column = scrollable(
-            column(result_items).spacing(2)
-        )
-        .height(Length::Fill);
-
-        let overlay_box = container(
-            column![input, results_column].spacing(8)
-        )
-        .width(Length::Fixed(600.0))
-        .max_height(500.0)
-        .padding(16)
-        .style(search_overlay_style);
-
-        let backdrop = mouse_area(
-            container(Space::new(Length::Fill, Length::Fill))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(|_theme| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.4))),
-                    ..Default::default()
-                })
-        )
-        .on_press(Message::ToggleSearch);
-
-        stack![
-            backdrop,
-            center(opaque(overlay_box)),
-        ]
-        .into()
+        container(content_col)
+            .width(Length::Fixed(320.0))
+            .padding(10)
+            .style(search_panel_style)
+            .into()
     }
 
     fn view_editor(&self) -> Element<'_, Message> {

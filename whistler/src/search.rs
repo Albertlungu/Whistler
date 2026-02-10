@@ -22,7 +22,7 @@ pub fn search_workspace(root: &PathBuf, query: &str) -> Vec<SearchResult> {
 
     let walker = WalkBuilder::new(root)
         .hidden(true)
-        .git_ignore(false)
+        .git_ignore(true)
         .git_global(true)
         .build();
 

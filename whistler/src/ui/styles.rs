@@ -161,7 +161,7 @@ pub fn drag_handle_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
     }
 }
 
-pub fn search_overlay_style(_theme: &Theme) -> container::Style {
+pub fn search_panel_style(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(
             THEME.bg_primary.r,
@@ -176,9 +176,24 @@ pub fn search_overlay_style(_theme: &Theme) -> container::Style {
         },
         shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-            offset: Vector::new(0.0, 8.0),
-            blur_radius: 32.0,
+            offset: Vector::new(4.0, 4.0),
+            blur_radius: 24.0,
         },
         ..Default::default()
+    }
+}
+
+pub fn search_input_style(_theme: &Theme, _status: iced::widget::text_input::Status) -> iced::widget::text_input::Style {
+    iced::widget::text_input::Style {
+        background: Background::Color(lighten(THEME.bg_primary, 0.04)),
+        border: Border {
+            color: THEME.border_subtle,
+            width: 1.0,
+            radius: (BORDER_RADIUS_TAB).into(),
+        },
+        icon: THEME.text_dim,
+        placeholder: THEME.text_placeholder,
+        value: THEME.text_primary,
+        selection: THEME.selection,
     }
 }
