@@ -32,6 +32,11 @@ pub enum Message {
     SearchQueryChanged(String),
     SearchCompleted(Vec<SearchResult>),
     SearchResultClicked(PathBuf, usize), // (filepath, line number)
+    /// File finding
+    ToggleFileFinder,
+    FileFinderQueryChanged(String),
+    FileFinderSelect, // Enter to open file
+    FileFinderNavigate(i32), // This is to go up/down using arrow keys
     /// Fullscreen and window management stuff
     ToggleFullscreen(iced::window::Mode),
 }
