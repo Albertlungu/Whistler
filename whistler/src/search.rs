@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
 
 #[derive(Debug, Clone)]
 pub struct SearchMatch {
@@ -59,4 +61,53 @@ pub fn search_workspace(root: &PathBuf, query: &str) -> Vec<SearchResult> {
         }
     }
     results
+}
+
+pub fn collect_all_files(root: &PathBuf) -> Vec<(String, PathBuf)> {
+    use ignore::WalkBuilder;
+
+    let mut files = Vec::new();
+
+    let walker = WalkBuilder::new(root)
+        .hidden(true)
+        .git_ignore(true)
+        .git_global(true)
+        .build();
+
+    for entry in walker.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let display = path.strip_prefix(root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string();
+
+        files.push((display, path.to_path_buf()));
+    }
+
+    files
+}
+
+
+pub fn fuzzy_find_files(
+    query: &str,
+    files: &[(String, PathBuf)],
+    max_results: usize,
+) -> Vec<(i64, String, PathBuf)> {
+    let matcher = SkimMatcherV2::default();
+
+    let mut scored: Vec<(i64, String, PathBuf)> = files
+        .iter()
+        .filter_map(|(display, abs_path)| {
+            matcher.fuzzy_match(display, query)
+                .map(|score| (score, display.clone(), abs_path.clone()))
+        })
+        .collect();
+
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.truncate(max_results);
+    scored
 }
