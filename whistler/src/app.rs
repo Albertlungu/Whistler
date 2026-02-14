@@ -1,9 +1,11 @@
+use iced::advanced::widget::operation::TextInput;
 use iced::keyboard::Key;
 use iced::window;
-use iced::widget::{text, text_input, column, row, button, container, mouse_area, scrollable, markdown, Space, stack};
+use iced::widget::{Space, TextInput, button, column, container, markdown, mouse_area, row, scrollable, stack, text, text_input};
 use iced::widget::text_editor::{Content, Action};
 use iced::{Background, Color, Element, Event, Length, Subscription};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use crate::message::Message;
 use crate::file_tree::FileTree;
@@ -33,20 +35,32 @@ pub struct Tab {
 }
 
 pub struct App {
+    // Tabs
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
+    // Editor
     cursor_line: usize,
     cursor_col: usize,
+    // Sidebar
     file_tree: Option<FileTree>,
     sidebar_visible: bool,
     sidebar_width: f32,
     resizing_sidebar: bool,
     resize_start_x: Option<f32>,
     resize_start_width: f32,
+    // Find words
     search_visible: bool,
     search_query: String,
     search_results: Vec<crate::search::SearchResult>,
     search_input_id: iced::widget::Id,
+    // File finder
+    file_finder_visible: bool,
+    file_finder_query: String,
+    file_finder_results: Vec<(i64, String, PathBuf)>,
+    file_finder_selected: usize,
+    all_workspace_files: Vec<(String, PathBuf)>,
+    recent_files: Vec<PathBuf>,
+    file_finder_input_id: text_input::Id,
 }
 
 impl Default for App {
@@ -66,6 +80,13 @@ impl Default for App {
             search_query: String::new(),
             search_results: Vec::new(),
             search_input_id: iced::widget::Id::unique(),
+            file_finder_visible: false,
+            file_finder_query: String::new(),
+            file_finder_results: Vec::new(),
+            file_finder_selected: 0,
+            all_workspace_files: Vec::new(),
+            recent_files: Vec::new(),
+            file_finder_input_id: text_input::Id::unique(),
         }
     }
 }
@@ -144,6 +165,12 @@ impl App {
                 iced::Task::none()
             }
             Message::FileOpened(path, content) => {
+                self.recent_files.retain(|p| p != &path);
+                self.recent_files.insert(0, path.clone());;
+                if self.recent_files.len() > 20 {
+                    self.recent_files.truncate(20);
+                }
+
                 let name = path.file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
@@ -189,7 +216,8 @@ impl App {
                 )
             }
             Message::FolderOpened(path) => {
-                self.file_tree = Some(FileTree::new(path));
+                self.file_tree = Some(FileTree::new(path.clone()));
+                self.all_workspace_files = crate::search::collect_all_files(&path);
                 iced::Task::none()
             }
             Message::SaveFile => {
@@ -342,6 +370,75 @@ impl App {
                     |(path, content)| Message::FileOpened(path, content),
                 )
             }
+
+            Message::ToggleFileFinder => {
+                self.file_finder_visible = !self.file_finder_visible;
+                if !self.file_finder_visible {
+                    self.file_finder_query.clear();
+                    self.file_finder_results.clear();
+                    self.file_finder_selected = 0;
+                    return iced::Task::none();
+                }
+                text_input::focus(self.file_finder_input_id.clone())
+            }
+
+            Message::FileFinderQueryChanged(query) => {
+                self.file_finder_query = query.clone();
+                self.file_finder_selected = 0;
+
+                if query.is_empty() {
+                    self.file_finder_results.clear();
+                } else {
+                    self.file_finder_results = crate::search::fuzzy_find_files(
+                        &query,
+                        &self.all_workspace_files,
+                    20,
+                    );
+                }
+                iced::Task::none()
+            }
+
+            Message::FileFinderNavigate(delta) => {
+                if !self.file_finder_visible {
+                    return iced::Task::none();
+                }
+                let count = if self.file_finder_query.is_empty() {
+                    self.recent_files.len()
+                } else {
+                    self.file_finder_results.len()
+                };
+                if count == 0 {
+                    return iced::Task::none();
+                }
+                let current = self.file_finder_selected as i32;
+                let next = (current + delta).rem_euclid(count as i32) as usize;
+                self.file_finder_selected = next;
+                iced::Task::none()
+            }
+
+            Message::FileFinderSelect => {
+                if !self.file_finder_visible {
+                    return iced::Task::none();
+                }
+
+                let path = if self.file_finder_query.is_empty() {
+                    self.recent_files.get(self.file_finder_selected).cloned()
+                } else {
+                    self.file_finder_results
+                        .get(self.file_finder_selected)
+                        .map(|_, _, p| p.clone())
+                };
+
+                self.file_finder_visible = false;
+                self.file_finder_query.clear();
+                self.file_finder_results.clear();
+                self.file_finder_selected = 0;
+
+                if let Some(path) = path {
+                    return self.update(Message::FileClicked(path));
+                }
+                iced::Task::none()
+            }
         }
     }
 
@@ -421,6 +518,23 @@ impl App {
                 modifiers,
                 ..
             }) => {
+                let navigation_msg = match key {
+                    Key::Named(iced::keyboard::key::Named::ArrowUp) =>
+                        Some(Message::FileFinderNavigate(-1)),
+                    Key::Named(iced::keyboard::key::Named::ArrowDown) =>
+                        Some(Message::FileFinderNavigate(1)),
+                    Key::Named(iced::keyboard::key::Named::Enter) =>
+                        Some(Message::FileFinderSelect),
+                    Key::Named(iced::keyboard::key::Named::Escape) =>
+                        Some(Message::ToggleFileFinder),
+                    _ => None,
+
+                };
+
+                if navigation_msg.is_some() {
+                    return navigation_msg;
+                }
+
                 if modifiers.command() && modifiers.control() {
                     match c.as_str() {
                         "f" => return Some(Message::ToggleFullscreen(window::Mode::Fullscreen)),
@@ -438,6 +552,7 @@ impl App {
                         "o" => return Some(Message::OpenFolderDialog),
                         "w" => return Some(Message::CloseActiveTab),
                         "s" => return Some(Message::SaveFile),
+                        "t" => return Some(Message::ToggleFileFinder),
                         _ => {}
                     }
                 }
@@ -623,5 +738,114 @@ impl App {
         )
         .center_x(Length::Fill)
         .center_y(Length::Fill)
+    }
+
+    fn view_file_finder_overlay(&self) -> Element<'_, Message> {
+        use iced::widget::{text_input, stack, center, Space, opaque};
+
+        let input = text_input("Search files...", &self.file_finder_query)
+            .id(self.file_finder_input_id.clone())
+            .on_input(Message::FileFinderQueryChanged)
+            .size(14)
+            .padding(12)
+            .width(Length::Fill);
+
+        let mut items: Vec<Element<'_, Message>> = Vec::new();
+
+        if self.file_finder_query.is_empty() {
+            if !self.recent_files.is_empty() {
+                items.push(
+                    container(
+                        text("Recent Files")
+                            .size(11)
+                            .color(THEME.text_dim)
+                    )
+                    .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 8.0 })
+                    .into()
+                );
+            }
+            for (idx, path) in self.recent_files.iter().enumerate() {
+                let is_selected = idx == self.file_finder_selected;
+                let display = path.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let parent = path.parent()
+                    .and_then(|p| {
+                        self.file_tree.as_ref().map(|t| {
+                            p.strip_prefix(&t.root)
+                                .unwrap_or(p)
+                                .to_string_lossy()
+                                .to_string()
+                        })
+                    })
+                    .unwrap_or_default();
+
+                let file_path = path.clone();
+                items.push(
+                    button(
+                        row![
+                            text(&display).size(13).color(if is_selected { THEME.text_primary } else { THEME.text_muted }),
+                            text(&parent).size(11).color(THEME.text_dim),
+                        ]
+                        .spacing(8)
+                        .align_y(iced::Alignment::Center)
+                    )
+                    .style(file_finder_item_style(is_selected))
+                    .on_press(Message::FileClicked(file_path))
+                    .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+                    .width(Length::Fill)
+                    .into()
+                );
+            }
+        } else {
+            for (idx, (_score, display, abs_path)) in self.file_finder_results.iter().enumerate() {
+                let is_selected = idx == self.file_finder_selected;
+                let path = abs_path.clone();
+
+                items.push(
+                    button(
+                        text(display).size(13).color(
+                            if is_selected { THEME.text_primary } else { THEME.text_muted }
+                        )
+                    )
+                    .style(file_finder_item_style(is_selected))
+                    .on_press(Message::FileClicked(path))
+                    .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+                    .width(Length::Fill)
+                    .into()
+                );
+            }
+        }
+
+        let results_column = scrollable(
+            column(items).spacing(2)
+        )
+        .height(Length::Fill);
+
+        let overlay_box = container(
+            column![input, results_column].spacing(8)
+        )
+        .width(Length::Fixed(500.0))
+        .max_height(400.0)
+        .padding(12)
+        .style(search_input_style);
+
+        let backdrop = mouse_area(
+            container(Space::new(Length::Fill, Length::Fill))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.4))),
+                    ..Default::default()
+                })
+        )
+        .on_press(Message::ToggleFileFinder);
+
+        stack![
+            backdrop,
+            center(opaque(overlay_box)),
+        ]
+        .into()
     }
 }

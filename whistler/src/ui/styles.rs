@@ -1,3 +1,4 @@
+use iced::wgpu::naga::back;
 use iced::widget::button::{Style as ButtonStyle, Status as ButtonStatus};
 use iced::widget::container;
 use iced::widget::text_editor;
@@ -195,5 +196,37 @@ pub fn search_input_style(_theme: &Theme, _status: iced::widget::text_input::Sta
         placeholder: THEME.text_placeholder,
         value: THEME.text_primary,
         selection: THEME.selection,
+    }
+}
+
+pub fn file_finder_item_style(is_selected: bool) -> impl Fn(&Theme, ButtonStatus) -> ButtonStyle {
+    move |_theme, status| {
+        let background = if is_selected {
+            Some(Background::Color(THEME.bg_hover))
+        } else {
+            match status {
+                ButtonStatus::Hovered => Some(Background::Color(
+                    Color::from_rgba(
+                        THEME.bg_hover.r,
+                        THEME.bg_hover.g,
+                        THEME.bg_hover.b,
+                        THEME.bg_hover.a * 0.5,
+                    )
+                )),
+                _ => None,
+            }
+        };
+
+        ButtonStyle {
+            background,
+            text_color: if is_selected { THEME.text_primary } else { THEME.text_muted },
+            border: Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: 6.0.into(),
+            },
+            shadow: Default::default(),
+            snap: false,
+        }
     }
 }
