@@ -10,8 +10,8 @@ use crate::file_tree::FileTree;
 use crate::theme::*;
 use crate::ui::{
     create_editor, editor_container_style, empty_editor, file_finder_item_style,
-    search_input_style, search_panel_style, status_bar_style, tab_bar_style, tab_button_style,
-    tab_close_button_style, tree_button_style, view_sidebar,
+    file_finder_panel_style, search_input_style, search_panel_style, status_bar_style,
+    tab_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar,
 };
 
 #[derive(Debug)]
@@ -499,7 +499,10 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        iced::event::listen_with(|event, _status, _id| {
+        let file_finder_visible = self.file_finder_visible;
+        let search_visible = self.search_visible;
+
+        iced::event::listen_with(move |event, _status, _id| {
             match event {
                 Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                     Some(Message::SidebarResizing(position.x))
@@ -508,58 +511,59 @@ impl App {
                     Some(Message::SidebarResizeEnd)
                 }
                 Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: Key::Named(iced::keyboard::key::Named::Escape),
-                ..
-            }) => {
-                return Some(Message::ToggleSearch);
-            }
-                Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key,
-                modifiers,
-                ..
-            }) => {
-                let navigation_msg = match &key {
-                    Key::Named(iced::keyboard::key::Named::ArrowUp) =>
-                        Some(Message::FileFinderNavigate(-1)),
-                    Key::Named(iced::keyboard::key::Named::ArrowDown) =>
-                        Some(Message::FileFinderNavigate(1)),
-                    Key::Named(iced::keyboard::key::Named::Enter) =>
-                        Some(Message::FileFinderSelect),
-                    Key::Named(iced::keyboard::key::Named::Escape) =>
-                        Some(Message::ToggleFileFinder),
-                    _ => None,
-                };
-
-                if navigation_msg.is_some() {
-                    return navigation_msg;
-                }
-
-                if let Key::Character(c) = &key {
-                    if modifiers.command() && modifiers.control() {
-                        match c.as_str() {
-                            "f" => return Some(Message::ToggleFullscreen(window::Mode::Fullscreen)),
-                            _ => {}
+                    key,
+                    modifiers,
+                    ..
+                }) => {
+                    let navigation_msg = match &key {
+                        Key::Named(iced::keyboard::key::Named::Escape) => {
+                            if file_finder_visible {
+                                Some(Message::ToggleFileFinder)
+                            } else if search_visible {
+                                Some(Message::ToggleSearch)
+                            } else {
+                                None
+                            }
                         }
-                    } else if modifiers.command() && modifiers.shift() {
-                        match c.as_str() {
-                            "v" | "V" => return Some(Message::PreviewMarkdown),
-                            "f" | "F" => return Some(Message::ToggleSearch),
-                            _ => {}
-                        }
-                    } else if modifiers.command() {
-                        match c.as_str() {
-                            "r" => return Some(Message::ToggleSidebar),
-                            "o" => return Some(Message::OpenFolderDialog),
-                            "w" => return Some(Message::CloseActiveTab),
-                            "s" => return Some(Message::SaveFile),
-                            "t" => return Some(Message::ToggleFileFinder),
-                            _ => {}
+                        Key::Named(iced::keyboard::key::Named::ArrowUp) =>
+                            Some(Message::FileFinderNavigate(-1)),
+                        Key::Named(iced::keyboard::key::Named::ArrowDown) =>
+                            Some(Message::FileFinderNavigate(1)),
+                        Key::Named(iced::keyboard::key::Named::Enter) =>
+                            Some(Message::FileFinderSelect),
+                        _ => None,
+                    };
+
+                    if navigation_msg.is_some() {
+                        return navigation_msg;
+                    }
+
+                    if let Key::Character(c) = &key {
+                        if modifiers.command() && modifiers.control() {
+                            match c.as_str() {
+                                "f" => return Some(Message::ToggleFullscreen(window::Mode::Fullscreen)),
+                                _ => {}
+                            }
+                        } else if modifiers.command() && modifiers.shift() {
+                            match c.as_str() {
+                                "v" | "V" => return Some(Message::PreviewMarkdown),
+                                "f" | "F" => return Some(Message::ToggleSearch),
+                                _ => {}
+                            }
+                        } else if modifiers.command() {
+                            match c.as_str() {
+                                "r" => return Some(Message::ToggleSidebar),
+                                "o" => return Some(Message::OpenFolderDialog),
+                                "w" => return Some(Message::CloseActiveTab),
+                                "s" => return Some(Message::SaveFile),
+                                "t" => return Some(Message::ToggleFileFinder),
+                                _ => {}
+                            }
                         }
                     }
+                    None
                 }
-                None
-            }
-            _ => None,
+                _ => None,
             }
         })
     }
@@ -742,13 +746,14 @@ impl App {
     }
 
     fn view_file_finder_overlay(&self) -> Element<'_, Message> {
-        use iced::widget::{text_input, stack, center, Space, opaque};
+        use iced::widget::{stack, center, Space, opaque};
 
-        let input = text_input("Search files...", &self.file_finder_query)
+        let input = text_input("Go to file...", &self.file_finder_query)
             .id(self.file_finder_input_id.clone())
             .on_input(Message::FileFinderQueryChanged)
-            .size(14)
-            .padding(12)
+            .size(15)
+            .padding(iced::Padding { top: 16.0, right: 18.0, bottom: 16.0, left: 18.0 })
+            .style(search_input_style)
             .width(Length::Fill);
 
         let mut items: Vec<Element<'_, Message>> = Vec::new();
@@ -758,10 +763,10 @@ impl App {
                 items.push(
                     container(
                         text("Recent Files")
-                            .size(11)
+                            .size(10)
                             .color(THEME.text_dim)
                     )
-                    .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 4.0, left: 8.0 })
+                    .padding(iced::Padding { top: 8.0, right: 8.0, bottom: 4.0, left: 14.0 })
                     .into()
                 );
             }
@@ -789,12 +794,12 @@ impl App {
                             text(display).size(13).color(if is_selected { THEME.text_primary } else { THEME.text_muted }),
                             text(parent).size(11).color(THEME.text_dim),
                         ]
-                        .spacing(8)
+                        .spacing(10)
                         .align_y(iced::Alignment::Center)
                     )
                     .style(file_finder_item_style(is_selected))
                     .on_press(Message::FileClicked(file_path))
-                    .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+                    .padding(iced::Padding { top: 7.0, right: 10.0, bottom: 7.0, left: 10.0 })
                     .width(Length::Fill)
                     .into()
                 );
@@ -812,32 +817,44 @@ impl App {
                     )
                     .style(file_finder_item_style(is_selected))
                     .on_press(Message::FileClicked(path))
-                    .padding(iced::Padding { top: 6.0, right: 12.0, bottom: 6.0, left: 12.0 })
+                    .padding(iced::Padding { top: 7.0, right: 10.0, bottom: 7.0, left: 10.0 })
                     .width(Length::Fill)
                     .into()
                 );
             }
         }
 
-        let results_column = scrollable(
-            column(items).spacing(2)
-        )
-        .height(Length::Fill);
+        let has_results = !items.is_empty();
 
-        let overlay_box = container(
-            column![input, results_column].spacing(8)
-        )
-        .width(Length::Fixed(500.0))
-        .max_height(400.0)
-        .padding(12)
-        .style(search_panel_style);
+        let separator = container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fixed(1.0))
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.07))),
+                ..Default::default()
+            });
+
+        let inner: Element<'_, Message> = if has_results {
+            let results_column = scrollable(
+                column(items).spacing(2).padding(iced::Padding { top: 6.0, right: 6.0, bottom: 6.0, left: 6.0 })
+            )
+            .height(Length::Shrink);
+            column![input, separator, results_column].spacing(0).into()
+        } else {
+            input.into()
+        };
+
+        let overlay_box = container(inner)
+            .width(Length::Fixed(520.0))
+            .max_height(440.0)
+            .style(file_finder_panel_style);
 
         let backdrop = mouse_area(
             container(Space::new())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(|_theme| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.4))),
+                    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.45))),
                     ..Default::default()
                 })
         )

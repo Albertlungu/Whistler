@@ -1,11 +1,10 @@
-use iced::wgpu::naga::back;
 use iced::widget::button::{Style as ButtonStyle, Status as ButtonStatus};
 use iced::widget::container;
 use iced::widget::text_editor;
 use iced::border::Radius;
 use iced::{Background, Border, Color, Theme, Vector};
 
-use crate::theme::{self, *};
+use crate::theme::*;
 
 fn lighten(color: Color, amount: f32) -> Color {
     Color::from_rgba(
@@ -199,20 +198,35 @@ pub fn search_input_style(_theme: &Theme, _status: iced::widget::text_input::Sta
     }
 }
 
+pub fn file_finder_panel_style(_theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgba(
+            (THEME.bg_primary.r + 0.04).min(1.0),
+            (THEME.bg_primary.g + 0.04).min(1.0),
+            (THEME.bg_primary.b + 0.07).min(1.0),
+            0.97,
+        ))),
+        border: Border {
+            color: Color::from_rgba(1.0, 1.0, 1.0, 0.10),
+            width: 1.0,
+            radius: 18.0.into(),
+        },
+        shadow: iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.7),
+            offset: Vector::new(0.0, 24.0),
+            blur_radius: 80.0,
+        },
+        ..Default::default()
+    }
+}
+
 pub fn file_finder_item_style(is_selected: bool) -> impl Fn(&Theme, ButtonStatus) -> ButtonStyle {
     move |_theme, status| {
         let background = if is_selected {
-            Some(Background::Color(THEME.bg_hover))
+            Some(Background::Color(THEME.bg_pressed))
         } else {
             match status {
-                ButtonStatus::Hovered => Some(Background::Color(
-                    Color::from_rgba(
-                        THEME.bg_hover.r,
-                        THEME.bg_hover.g,
-                        THEME.bg_hover.b,
-                        THEME.bg_hover.a * 0.5,
-                    )
-                )),
+                ButtonStatus::Hovered => Some(Background::Color(THEME.bg_hover)),
                 _ => None,
             }
         };
@@ -223,7 +237,7 @@ pub fn file_finder_item_style(is_selected: bool) -> impl Fn(&Theme, ButtonStatus
             border: Border {
                 color: Color::TRANSPARENT,
                 width: 0.0,
-                radius: 6.0.into(),
+                radius: 8.0.into(),
             },
             shadow: Default::default(),
             snap: false,

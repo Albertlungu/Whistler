@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::{fs, str::FromStr};
 
 use syntect::highlighting::{
-    Color as SynColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem, ThemeSet, ThemeSettings
+    Color as SynColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem, ThemeSettings
 };
 
 pub const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;

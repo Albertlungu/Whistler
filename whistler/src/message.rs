@@ -39,4 +39,5 @@ pub enum Message {
     FileFinderNavigate(i32), // This is to go up/down using arrow keys
     /// Fullscreen and window management stuff
     ToggleFullscreen(iced::window::Mode),
+    EscapePressed,
 }

@@ -3,7 +3,7 @@ use iced::widget::text_editor::{TextEditor, Content, Binding, KeyPress, Motion};
 use iced::{Element, Length};
 
 use crate::message::Message;
-use crate::syntax::{VscodeHighlighter, Settings, Highlight};
+use crate::syntax::{VscodeHighlighter, Settings};
 use crate::ui::styles::text_editor_style;
 
 pub fn create_editor<'a>(content: &'a Content, extension: &str) -> Element<'a, Message> {
