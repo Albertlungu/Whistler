@@ -1,19 +1,17 @@
-use iced::advanced::widget::operation::TextInput;
 use iced::keyboard::Key;
 use iced::window;
-use iced::widget::{Space, TextInput, button, column, container, markdown, mouse_area, row, scrollable, stack, text, text_input};
+use iced::widget::{button, column, container, markdown, mouse_area, row, scrollable, stack, text, text_input};
 use iced::widget::text_editor::{Content, Action};
 use iced::{Background, Color, Element, Event, Length, Subscription};
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use crate::message::Message;
 use crate::file_tree::FileTree;
 use crate::theme::*;
 use crate::ui::{
-    create_editor, editor_container_style, empty_editor, search_input_style, search_panel_style,
-    status_bar_style, tab_bar_style, tab_button_style, tab_close_button_style, tree_button_style,
-    view_sidebar,
+    create_editor, editor_container_style, empty_editor, file_finder_item_style,
+    search_input_style, search_panel_style, status_bar_style, tab_bar_style, tab_button_style,
+    tab_close_button_style, tree_button_style, view_sidebar,
 };
 
 #[derive(Debug)]
@@ -60,7 +58,7 @@ pub struct App {
     file_finder_selected: usize,
     all_workspace_files: Vec<(String, PathBuf)>,
     recent_files: Vec<PathBuf>,
-    file_finder_input_id: text_input::Id,
+    file_finder_input_id: iced::widget::Id,
 }
 
 impl Default for App {
@@ -86,7 +84,7 @@ impl Default for App {
             file_finder_selected: 0,
             all_workspace_files: Vec::new(),
             recent_files: Vec::new(),
-            file_finder_input_id: text_input::Id::unique(),
+            file_finder_input_id: iced::widget::Id::unique(),
         }
     }
 }
@@ -166,7 +164,7 @@ impl App {
             }
             Message::FileOpened(path, content) => {
                 self.recent_files.retain(|p| p != &path);
-                self.recent_files.insert(0, path.clone());;
+                self.recent_files.insert(0, path.clone());
                 if self.recent_files.len() > 20 {
                     self.recent_files.truncate(20);
                 }
@@ -379,7 +377,7 @@ impl App {
                     self.file_finder_selected = 0;
                     return iced::Task::none();
                 }
-                text_input::focus(self.file_finder_input_id.clone())
+                iced::widget::operation::focus(self.file_finder_input_id.clone())
             }
 
             Message::FileFinderQueryChanged(query) => {
@@ -426,7 +424,7 @@ impl App {
                 } else {
                     self.file_finder_results
                         .get(self.file_finder_selected)
-                        .map(|_, _, p| p.clone())
+                        .map(|(_, _, p)| p.clone())
                 };
 
                 self.file_finder_visible = false;
@@ -486,7 +484,9 @@ impl App {
                 ..Default::default()
             });
 
-        if self.search_visible {
+        if self.file_finder_visible {
+            stack![wrapped, self.view_file_finder_overlay()].into()
+        } else if self.search_visible {
             let search_panel = container(self.view_search_panel())
                 .padding(iced::Padding { top: 20.0, right: 0.0, bottom: 0.0, left: 20.0 })
                 .width(Length::Fill)
@@ -514,11 +514,11 @@ impl App {
                 return Some(Message::ToggleSearch);
             }
                 Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: Key::Character(c),
+                key,
                 modifiers,
                 ..
             }) => {
-                let navigation_msg = match key {
+                let navigation_msg = match &key {
                     Key::Named(iced::keyboard::key::Named::ArrowUp) =>
                         Some(Message::FileFinderNavigate(-1)),
                     Key::Named(iced::keyboard::key::Named::ArrowDown) =>
@@ -528,32 +528,33 @@ impl App {
                     Key::Named(iced::keyboard::key::Named::Escape) =>
                         Some(Message::ToggleFileFinder),
                     _ => None,
-
                 };
 
                 if navigation_msg.is_some() {
                     return navigation_msg;
                 }
 
-                if modifiers.command() && modifiers.control() {
-                    match c.as_str() {
-                        "f" => return Some(Message::ToggleFullscreen(window::Mode::Fullscreen)),
-                        _ => {}
-                    }
-                } else if modifiers.command() && modifiers.shift() {
-                    match c.as_str() {
-                        "v" | "V" => return Some(Message::PreviewMarkdown),
-                        "f" | "F" => return Some(Message::ToggleSearch),
-                        _ => {}
-                    }
-                } else if modifiers.command() {
-                    match c.as_str() {
-                        "r" => return Some(Message::ToggleSidebar),
-                        "o" => return Some(Message::OpenFolderDialog),
-                        "w" => return Some(Message::CloseActiveTab),
-                        "s" => return Some(Message::SaveFile),
-                        "t" => return Some(Message::ToggleFileFinder),
-                        _ => {}
+                if let Key::Character(c) = &key {
+                    if modifiers.command() && modifiers.control() {
+                        match c.as_str() {
+                            "f" => return Some(Message::ToggleFullscreen(window::Mode::Fullscreen)),
+                            _ => {}
+                        }
+                    } else if modifiers.command() && modifiers.shift() {
+                        match c.as_str() {
+                            "v" | "V" => return Some(Message::PreviewMarkdown),
+                            "f" | "F" => return Some(Message::ToggleSearch),
+                            _ => {}
+                        }
+                    } else if modifiers.command() {
+                        match c.as_str() {
+                            "r" => return Some(Message::ToggleSidebar),
+                            "o" => return Some(Message::OpenFolderDialog),
+                            "w" => return Some(Message::CloseActiveTab),
+                            "s" => return Some(Message::SaveFile),
+                            "t" => return Some(Message::ToggleFileFinder),
+                            _ => {}
+                        }
                     }
                 }
                 None
@@ -785,8 +786,8 @@ impl App {
                 items.push(
                     button(
                         row![
-                            text(&display).size(13).color(if is_selected { THEME.text_primary } else { THEME.text_muted }),
-                            text(&parent).size(11).color(THEME.text_dim),
+                            text(display).size(13).color(if is_selected { THEME.text_primary } else { THEME.text_muted }),
+                            text(parent).size(11).color(THEME.text_dim),
                         ]
                         .spacing(8)
                         .align_y(iced::Alignment::Center)
@@ -829,10 +830,10 @@ impl App {
         .width(Length::Fixed(500.0))
         .max_height(400.0)
         .padding(12)
-        .style(search_input_style);
+        .style(search_panel_style);
 
         let backdrop = mouse_area(
-            container(Space::new(Length::Fill, Length::Fill))
+            container(Space::new())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(|_theme| container::Style {
