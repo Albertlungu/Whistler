@@ -393,7 +393,7 @@ impl App {
                     20,
                     );
                 }
-                iced::Task::none()
+                iced::widget::operation::focus(self.file_finder_input_id.clone())
             }
 
             Message::FileFinderNavigate(delta) => {
@@ -434,6 +434,20 @@ impl App {
 
                 if let Some(path) = path {
                     return self.update(Message::FileClicked(path));
+                }
+                iced::Task::none()
+            }
+
+            Message::EscapePressed => {
+                if self.file_finder_visible {
+                    self.file_finder_visible = false;
+                    self.file_finder_query.clear();
+                    self.file_finder_results.clear();
+                    self.file_finder_selected = 0;
+                } else if self.search_visible {
+                    self.search_visible = false;
+                    self.search_query.clear();
+                    self.search_results.clear();
                 }
                 iced::Task::none()
             }
@@ -499,10 +513,7 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let file_finder_visible = self.file_finder_visible;
-        let search_visible = self.search_visible;
-
-        iced::event::listen_with(move |event, _status, _id| {
+        iced::event::listen_with(|event, _status, _id| {
             match event {
                 Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                     Some(Message::SidebarResizing(position.x))
@@ -516,15 +527,8 @@ impl App {
                     ..
                 }) => {
                     let navigation_msg = match &key {
-                        Key::Named(iced::keyboard::key::Named::Escape) => {
-                            if file_finder_visible {
-                                Some(Message::ToggleFileFinder)
-                            } else if search_visible {
-                                Some(Message::ToggleSearch)
-                            } else {
-                                None
-                            }
-                        }
+                        Key::Named(iced::keyboard::key::Named::Escape) =>
+                            Some(Message::EscapePressed),
                         Key::Named(iced::keyboard::key::Named::ArrowUp) =>
                             Some(Message::FileFinderNavigate(-1)),
                         Key::Named(iced::keyboard::key::Named::ArrowDown) =>
