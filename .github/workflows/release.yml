@@ -67,7 +67,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             whistler/target
-          key: windows-cargo-${{ hashFiles('whistler/Cargo.lock') }}
+          key: windows-cargo-${{ hashFiles('whistler/Cargo.lock', 'whistler/build.rs') }}
 
       - name: Build .exe
         working-directory: whistler
