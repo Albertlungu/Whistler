@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS (.dmg)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            whistler/target
+          key: macos-cargo-${{ hashFiles('whistler/Cargo.lock') }}
+
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle
+
+      - name: Build .app
+        working-directory: whistler
+        run: cargo bundle --release
+
+      - name: Create .dmg
+        run: |
+          mkdir -p /tmp/whistler-dmg
+          cp -r "whistler/target/release/bundle/osx/Whistler IDE.app" /tmp/whistler-dmg/
+          ln -s /Applications /tmp/whistler-dmg/Applications
+          hdiutil create \
+            -volname "Whistler IDE" \
+            -srcfolder /tmp/whistler-dmg \
+            -ov -format UDZO \
+            "Whistler-${{ github.ref_name }}-macos.dmg"
+
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: "Whistler-${{ github.ref_name }}-macos.dmg"
+
+  build-windows:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            whistler/target
+          key: windows-cargo-${{ hashFiles('whistler/Cargo.lock') }}
+
+      - name: Build .exe
+        working-directory: whistler
+        run: cargo build --release
+
+      - name: Rename artifact
+        run: |
+          copy whistler\target\release\Whistler.exe "Whistler-${{ github.ref_name }}-windows.exe"
+
+      - name: Upload .exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: "Whistler-${{ github.ref_name }}-windows.exe"
+
+  release:
+    name: Create GitHub Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dmg
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Whistler-${{ github.ref_name }}-macos.dmg
+            Whistler-${{ github.ref_name }}-windows.exe
