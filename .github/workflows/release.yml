@@ -12,8 +12,44 @@ jobs:
   build-macos:
     name: Build macOS (.dmg)
     runs-on: macos-latest
+    env:
+      APP_NAME: "Whistler IDE.app"
+      DMG_NAME: "Whistler-${{ github.ref_name }}-macos.dmg"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate Apple notarization secrets
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          required=(
+            APPLE_CERTIFICATE_P12
+            APPLE_CERTIFICATE_PASSWORD
+            APPLE_KEYCHAIN_PASSWORD
+            APPLE_SIGNING_IDENTITY
+            APPLE_ID
+            APPLE_APP_SPECIFIC_PASSWORD
+            APPLE_TEAM_ID
+          )
+
+          missing=0
+          for var in "${required[@]}"; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required secret: $var"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -eq 1 ]; then
+            echo "Refusing to publish an unsigned or non-notarized macOS build."
+            exit 1
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -34,22 +70,74 @@ jobs:
         working-directory: whistler
         run: cargo bundle --release
 
+      - name: Import Apple signing certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Sign .app bundle
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          APP_PATH="whistler/target/release/bundle/osx/${APP_NAME}"
+          codesign --force --deep --timestamp --options runtime \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          spctl --assess --type execute --verbose=4 "$APP_PATH"
+
       - name: Create .dmg
         run: |
           mkdir -p /tmp/whistler-dmg
-          cp -r "whistler/target/release/bundle/osx/Whistler IDE.app" /tmp/whistler-dmg/
+          cp -r "whistler/target/release/bundle/osx/${APP_NAME}" /tmp/whistler-dmg/
           ln -s /Applications /tmp/whistler-dmg/Applications
           hdiutil create \
             -volname "Whistler IDE" \
             -srcfolder /tmp/whistler-dmg \
             -ov -format UDZO \
-            "Whistler-${{ github.ref_name }}-macos.dmg"
+            "$DMG_NAME"
+
+      - name: Sign .dmg
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_NAME"
+          codesign --verify --verbose=2 "$DMG_NAME"
+
+      - name: Notarize and staple .dmg
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit "$DMG_NAME" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$DMG_NAME"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG_NAME"
 
       - name: Upload .dmg artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: "Whistler-${{ github.ref_name }}-macos.dmg"
+          path: "${{ env.DMG_NAME }}"
 
   build-windows:
     name: Build Windows (.exe)
@@ -88,6 +176,8 @@ jobs:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
@@ -104,3 +194,33 @@ jobs:
           files: |
             Whistler-${{ github.ref_name }}-macos.dmg
             Whistler-${{ github.ref_name }}-windows.exe
+
+      - name: Update Homebrew formula
+        env:
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION_NUM="${VERSION#v}"
+
+          # Download the tarball to calculate SHA256
+          curl -sL "https://github.com/Albertlungu/Whistler/archive/refs/tags/${VERSION}.tar.gz" -o whistler.tar.gz
+          SHA256=$(sha256sum whistler.tar.gz | cut -d' ' -f1)
+
+          # Clone the tap repository
+          git clone "https://$GITHUB_TOKEN@github.com/Albertlungu/homebrew-whistler.git" tap-repo
+          cd tap-repo
+
+          # Update the formula
+          sed -i "s|url \".*\"|url \"https://github.com/Albertlungu/Whistler/archive/refs/tags/${VERSION}.tar.gz\"|" Formula/whistler.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/whistler.rb
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push if there are changes
+          if ! git diff --quiet; then
+            git add Formula/whistler.rb
+            git commit -m "Update formula for ${VERSION}"
+            git push
+          fi

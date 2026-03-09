@@ -1,6 +1,6 @@
 [package]
 name = "Whistler"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [dependencies]
@@ -22,4 +22,4 @@ winresource = "0.1"
 name = "Whistler IDE"
 identifier = "com.albertlungu.whistler"
 icon = ["../assets/icon.icns"]
-version = "0.1.0"
+version = "0.1.1"
