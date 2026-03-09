@@ -107,3 +107,25 @@ iced (~0.13+):
 > Config folder location
 
 **syntect**, which will be used as a fallback for syntax highlighting and theme color schemes (can export them to CSS)
+
+## Install with Homebrew (Source Build)
+
+If Gatekeeper blocks the downloaded `.dmg`, you can install Whistler from source using Homebrew.
+
+```bash
+brew tap Albertlungu/whistler https://github.com/Albertlungu/Whistler
+brew install Albertlungu/whistler/whistler
+```
+
+Then launch from Terminal with:
+
+```bash
+whistler
+```
+
+To update:
+
+```bash
+brew update
+brew upgrade Albertlungu/whistler/whistler
+```
